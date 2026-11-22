@@ -2,6 +2,396 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=utf-8\n"
 
+msgctxt "field:account.ebics.account,bank_account:"
+msgid "Bank Account"
+msgstr "Bankkonto"
+
+msgctxt "field:account.ebics.account,company:"
+msgid "Company"
+msgstr "Unternehmen"
+
+msgctxt "field:account.ebics.account,company_party:"
+msgid "Company Party"
+msgstr "Partei des Unternehmens"
+
+msgctxt "field:account.ebics.account,configuration:"
+msgid "Connection"
+msgstr "Zugang"
+
+msgctxt "field:account.ebics.account,iban:"
+msgid "IBAN"
+msgstr "IBAN"
+
+msgctxt "field:account.ebics.account,import_statements:"
+msgid "Import Statements"
+msgstr "Auszüge importieren"
+
+msgctxt "field:account.ebics.account,statement_journal:"
+msgid "Statement Journal"
+msgstr "Kontoauszugsjournal"
+
+msgctxt "field:account.ebics.configuration,accounts:"
+msgid "Accounts"
+msgstr "Konten"
+
+msgctxt "field:account.ebics.configuration,bank:"
+msgid "Bank"
+msgstr "Bank"
+
+msgctxt "field:account.ebics.configuration,bank_e002_hash:"
+msgid "Bank E002 Hash"
+msgstr "Hashwert Bank E002"
+
+msgctxt "field:account.ebics.configuration,bank_e002_hash_expected:"
+msgid "Expected Bank E002 Hash"
+msgstr "Erwarteter Hashwert Bank E002"
+
+msgctxt "field:account.ebics.configuration,bank_keys_data:"
+msgid "Bank Keys"
+msgstr "Bankschlüssel"
+
+msgctxt "field:account.ebics.configuration,bank_keys_data_id:"
+msgid "Bank Keys ID"
+msgstr "Bankschlüssel-ID"
+
+msgctxt "field:account.ebics.configuration,bank_x002_hash:"
+msgid "Bank X002 Hash"
+msgstr "Hashwert Bank X002"
+
+msgctxt "field:account.ebics.configuration,bank_x002_hash_expected:"
+msgid "Expected Bank X002 Hash"
+msgstr "Erwarteter Hashwert Bank X002"
+
+msgctxt "field:account.ebics.configuration,company:"
+msgid "Company"
+msgstr "Unternehmen"
+
+msgctxt "field:account.ebics.configuration,ebics_version:"
+msgid "EBICS Version"
+msgstr "EBICS-Version"
+
+msgctxt "field:account.ebics.configuration,formats:"
+msgid "Formats"
+msgstr "Formate"
+
+msgctxt "field:account.ebics.configuration,hia_sent:"
+msgid "HIA Sent"
+msgstr "HIA gesendet"
+
+msgctxt "field:account.ebics.configuration,host_id:"
+msgid "Host ID"
+msgstr "Host-ID"
+
+msgctxt "field:account.ebics.configuration,ini_sent:"
+msgid "INI Sent"
+msgstr "INI gesendet"
+
+msgctxt "field:account.ebics.configuration,key_bitlength:"
+msgid "Key Length"
+msgstr "Schlüssellänge"
+
+msgctxt "field:account.ebics.configuration,keyring_data:"
+msgid "Keyring"
+msgstr "Schlüsselbund"
+
+msgctxt "field:account.ebics.configuration,keyring_data_id:"
+msgid "Keyring ID"
+msgstr "Schlüsselbund-ID"
+
+msgctxt "field:account.ebics.configuration,last_fetch:"
+msgid "Last Fetch"
+msgstr "Letzter Abruf"
+
+msgctxt "field:account.ebics.configuration,name:"
+msgid "Name"
+msgstr "Name"
+
+msgctxt "field:account.ebics.configuration,partner_id:"
+msgid "Partner ID"
+msgstr "Kunden-ID"
+
+msgctxt "field:account.ebics.configuration,signature_class:"
+msgid "Signature Class"
+msgstr "Unterschriftsklasse"
+
+msgctxt "field:account.ebics.configuration,state:"
+msgid "State"
+msgstr "Status"
+
+msgctxt "field:account.ebics.configuration,url:"
+msgid "URL"
+msgstr "URL"
+
+msgctxt "field:account.ebics.configuration,user_a006_hash:"
+msgid "User A006 Hash"
+msgstr "Hashwert Teilnehmer A006"
+
+msgctxt "field:account.ebics.configuration,user_e002_hash:"
+msgid "User E002 Hash"
+msgstr "Hashwert Teilnehmer E002"
+
+msgctxt "field:account.ebics.configuration,user_id:"
+msgid "User ID"
+msgstr "Teilnehmer-ID"
+
+msgctxt "field:account.ebics.configuration,user_x002_hash:"
+msgid "User X002 Hash"
+msgstr "Hashwert Teilnehmer X002"
+
+msgctxt "field:account.ebics.configuration-account.ebics.format,configuration:"
+msgid "Connection"
+msgstr "Zugang"
+
+msgctxt "field:account.ebics.configuration-account.ebics.format,format:"
+msgid "Format"
+msgstr "Format"
+
+msgctxt "field:account.ebics.format,btf_params:"
+msgid "BTF Parameters"
+msgstr "BTF-Angabe"
+
+msgctxt "field:account.ebics.format,container:"
+msgid "Container"
+msgstr "Container"
+
+msgctxt "field:account.ebics.format,direction:"
+msgid "Direction"
+msgstr "Richtung"
+
+msgctxt "field:account.ebics.format,msg_name:"
+msgid "Message Name"
+msgstr "Nachrichtenname"
+
+msgctxt "field:account.ebics.format,msg_version:"
+msgid "Message Version"
+msgstr "Nachrichtenversion"
+
+msgctxt "field:account.ebics.format,name:"
+msgid "Name"
+msgstr "Name"
+
+msgctxt "field:account.ebics.format,processing:"
+msgid "Processing"
+msgstr "Verarbeitung"
+
+msgctxt "field:account.ebics.format,scope:"
+msgid "Scope"
+msgstr "Geltungsbereich"
+
+msgctxt "field:account.ebics.format,service_name:"
+msgid "Service Name"
+msgstr "Service-Name"
+
+msgctxt "field:account.ebics.format,service_option:"
+msgid "Service Option"
+msgstr "Service-Option"
+
+msgctxt "help:account.ebics.account,bank_account:"
+msgid "Active bank account of the company with an IBAN."
+msgstr "Aktives Bankkonto des Unternehmens mit IBAN."
+
+msgctxt "help:account.ebics.account,company:"
+msgid "The company of the connection."
+msgstr "Das Unternehmen des Zugangs."
+
+msgctxt "help:account.ebics.account,import_statements:"
+msgid "Import the camt.053 statements of this account."
+msgstr "Die camt.053-Auszüge dieses Kontos importieren."
+
+msgctxt "help:account.ebics.account,statement_journal:"
+msgid ""
+"The statement journal that account_statement_sepa finds for the IBAN and currency of the bank account.\n"
+"If empty, no or more than one journal matches; statements cannot be imported."
+msgstr ""
+"Das Kontoauszugsjournal, das account_statement_sepa über IBAN und Währung des Bankkontos findet.\n"
+"Ist das Feld leer, passt kein oder mehr als ein Journal; Auszüge können dann nicht importiert werden."
+
+msgctxt "help:account.ebics.configuration,bank_e002_hash_expected:"
+msgid ""
+"Hash value of the bank's E002 certificate as published by the bank (64 "
+"hexadecimal characters, spaces are ignored)."
+msgstr ""
+"Von der Bank veröffentlichter Hashwert des E002-Zertifikats der Bank (64 "
+"Hexadezimalzeichen, Leerzeichen werden ignoriert)."
+
+msgctxt "help:account.ebics.configuration,bank_x002_hash_expected:"
+msgid ""
+"Hash value of the bank's X002 certificate as published by the bank (64 "
+"hexadecimal characters, spaces are ignored)."
+msgstr ""
+"Von der Bank veröffentlichter Hashwert des X002-Zertifikats der Bank (64 "
+"Hexadezimalzeichen, Leerzeichen werden ignoriert)."
+
+msgctxt "help:account.ebics.configuration,company:"
+msgid "The company that holds the EBICS contract."
+msgstr "Das Unternehmen, das den EBICS-Vertrag hält."
+
+msgctxt "help:account.ebics.configuration,formats:"
+msgid "The formats to download for all accounts of this connection."
+msgstr "Die Formate, die für alle Konten dieses Zugangs abgerufen werden."
+
+msgctxt "help:account.ebics.configuration,key_bitlength:"
+msgid "Length of the RSA keys in bits, as required by the bank."
+msgstr "Länge der RSA-Schlüssel in Bit nach Vorgabe der Bank."
+
+msgctxt "help:account.ebics.configuration,signature_class:"
+msgid "Only effective with payment upload (v2)."
+msgstr "Erst mit dem Zahlungs-Upload (v2) wirksam."
+
+msgctxt "help:account.ebics.configuration,url:"
+msgid "EBICS URL of the bank (https:// only)."
+msgstr "EBICS-URL der Bank (nur https://)."
+
+msgctxt "help:account.ebics.format,active:"
+msgid "Deactivate standard formats instead of deleting them."
+msgstr "Standardformate deaktivieren statt löschen."
+
+msgctxt "help:account.ebics.format,msg_name:"
+msgid "BTF message name, e.g. camt.053."
+msgstr "BTF-Nachrichtenname, z. B. camt.053."
+
+msgctxt "help:account.ebics.format,msg_version:"
+msgid "Optional BTF message version, e.g. 08."
+msgstr "Optionale BTF-Nachrichtenversion, z. B. 08."
+
+msgctxt "help:account.ebics.format,processing:"
+msgid "What happens with the downloaded files."
+msgstr "Was mit den abgerufenen Dateien geschieht."
+
+msgctxt "help:account.ebics.format,scope:"
+msgid "BTF scope, e.g. DE. Leave empty for global formats."
+msgstr "BTF-Geltungsbereich, z. B. DE. Leer bei globalen Formaten."
+
+msgctxt "help:account.ebics.format,service_name:"
+msgid "BTF service name, e.g. EOP, STM, SCT."
+msgstr "BTF-Service-Name, z. B. EOP, STM, SCT."
+
+msgctxt "help:account.ebics.format,service_option:"
+msgid "BTF service option, e.g. COR, VOO1."
+msgstr "BTF-Service-Option, z. B. COR, VOO1."
+
+msgctxt "model:account.ebics.account,string:"
+msgid "EBICS Account"
+msgstr "EBICS-Konto"
+
+msgctxt "model:account.ebics.configuration,string:"
+msgid "EBICS Connection"
+msgstr "EBICS-Zugang"
+
+msgctxt "model:account.ebics.configuration-account.ebics.format,string:"
+msgid "EBICS Connection - Format"
+msgstr "EBICS-Zugang - Format"
+
+msgctxt "model:account.ebics.format,name:format_camt052_de"
+msgid "Intraday Transactions (camt.052)"
+msgstr "Untertägige Umsätze (camt.052)"
+
+msgctxt "model:account.ebics.format,name:format_camt053_de"
+msgid "Daily Statement (camt.053)"
+msgstr "Tagesauszug (camt.053)"
+
+msgctxt "model:account.ebics.format,name:format_camt054_de"
+msgid "Batch Booking Details (camt.054)"
+msgstr "Sammelbuchungsdetails (camt.054)"
+
+msgctxt "model:account.ebics.format,string:"
+msgid "EBICS Format"
+msgstr "EBICS-Format"
+
+msgctxt "model:ir.action,name:act_account_form"
+msgid "Released Accounts"
+msgstr "Freigegebene Konten"
+
+msgctxt "model:ir.action,name:act_configuration_form"
+msgid "EBICS Connections"
+msgstr "EBICS-Zugänge"
+
+msgctxt "model:ir.action,name:act_format_form"
+msgid "Formats"
+msgstr "Formate"
+
+msgctxt "model:ir.message,text:msg_account_bank_account_unique"
+msgid "A bank account can be released only once per EBICS connection."
+msgstr "Ein Bankkonto kann je EBICS-Zugang nur einmal freigegeben werden."
+
+msgctxt "model:ir.message,text:msg_account_company"
+msgid ""
+"The company of account \"%(account)s\" must be the company of EBICS "
+"connection \"%(configuration)s\"."
+msgstr ""
+"Das Unternehmen des Kontos „%(account)s“ muss das Unternehmen des EBICS-"
+"Zugangs „%(configuration)s“ sein."
+
+msgctxt "model:ir.message,text:msg_account_iban_required"
+msgid "The bank account \"%(bank_account)s\" has no IBAN."
+msgstr "Das Bankkonto „%(bank_account)s“ hat keine IBAN."
+
+msgctxt "model:ir.message,text:msg_configuration_format_unique"
+msgid "A format can be added only once to an EBICS connection."
+msgstr "Ein Format kann einem EBICS-Zugang nur einmal zugeordnet werden."
+
+msgctxt "model:ir.message,text:msg_configuration_hash_format"
+msgid ""
+"The value of \"%(field)s\" of EBICS connection \"%(configuration)s\" must "
+"consist of 64 hexadecimal characters."
+msgstr ""
+"Der Wert von „%(field)s“ des EBICS-Zugangs „%(configuration)s“ muss aus 64 "
+"Hexadezimalzeichen bestehen."
+
+msgctxt "model:ir.message,text:msg_configuration_participant_unique"
+msgid ""
+"The combination of host ID, partner ID and user ID must be unique per "
+"company."
+msgstr ""
+"Die Kombination aus Host-ID, Kunden-ID und Teilnehmer-ID muss je Unternehmen "
+"eindeutig sein."
+
+msgctxt "model:ir.message,text:msg_configuration_url_https"
+msgid "The URL of EBICS connection \"%(configuration)s\" must start with \"https://\"."
+msgstr ""
+"Die URL des EBICS-Zugangs „%(configuration)s“ muss mit „https://“ beginnen."
+
+msgctxt "model:ir.message,text:msg_format_import_camt053"
+msgid ""
+"Format \"%(format)s\" can only be imported as statement for message camt.053."
+msgstr ""
+"Das Format „%(format)s“ kann nur bei der Nachricht camt.053 als Kontoauszug "
+"importiert werden."
+
+msgctxt "model:ir.message,text:msg_format_processing_download"
+msgid "The processing of format \"%(format)s\" is only allowed for downloads."
+msgstr ""
+"Eine Verarbeitung ist beim Format „%(format)s“ nur für Downloads zulässig."
+
+msgctxt "model:ir.message,text:msg_format_processing_required"
+msgid "The download format \"%(format)s\" requires a processing."
+msgstr ""
+"Für das Download-Format „%(format)s“ muss eine Verarbeitung angegeben werden."
+
+msgctxt "model:ir.message,text:msg_format_unique"
+msgid ""
+"A format with the BTF parameters \"%(btf)s\" already exists (format "
+"\"%(format)s\")."
+msgstr ""
+"Ein Format mit der BTF-Angabe „%(btf)s“ existiert bereits (Format "
+"„%(format)s“)."
+
+msgctxt "model:ir.rule.group,name:rule_group_account_companies"
+msgid "User in companies"
+msgstr "Benutzer in Unternehmen"
+
+msgctxt "model:ir.rule.group,name:rule_group_configuration_companies"
+msgid "User in companies"
+msgstr "Benutzer in Unternehmen"
+
+msgctxt "model:ir.ui.menu,name:menu_account_form"
+msgid "Released Accounts"
+msgstr "Freigegebene Konten"
+
+msgctxt "model:ir.ui.menu,name:menu_configuration_form"
+msgid "EBICS Connections"
+msgstr "EBICS-Zugänge"
+
 msgctxt "model:ir.ui.menu,name:menu_ebics"
 msgid "EBICS"
 msgstr "EBICS"
@@ -10,6 +400,10 @@ msgctxt "model:ir.ui.menu,name:menu_ebics_configuration"
 msgid "EBICS"
 msgstr "EBICS"
 
+msgctxt "model:ir.ui.menu,name:menu_format_form"
+msgid "Formats"
+msgstr "Formate"
+
 msgctxt "model:res.group,name:group_ebics"
 msgid "EBICS"
 msgstr "EBICS-Benutzer"
@@ -17,3 +411,107 @@ msgstr "EBICS-Benutzer"
 msgctxt "model:res.group,name:group_ebics_admin"
 msgid "EBICS Administration"
 msgstr "EBICS-Administrator"
+
+msgctxt "selection:account.ebics.configuration,ebics_version:"
+msgid "EBICS 3.0 (H005)"
+msgstr "EBICS 3.0 (H005)"
+
+msgctxt "selection:account.ebics.configuration,key_bitlength:"
+msgid "2048"
+msgstr "2048"
+
+msgctxt "selection:account.ebics.configuration,key_bitlength:"
+msgid "3072"
+msgstr "3072"
+
+msgctxt "selection:account.ebics.configuration,key_bitlength:"
+msgid "4096"
+msgstr "4096"
+
+msgctxt "selection:account.ebics.configuration,signature_class:"
+msgid "A - First Signature"
+msgstr "A - Erstunterschrift"
+
+msgctxt "selection:account.ebics.configuration,signature_class:"
+msgid "B - Second Signature"
+msgstr "B - Zweitunterschrift"
+
+msgctxt "selection:account.ebics.configuration,signature_class:"
+msgid "E - Single Signature"
+msgstr "E - Einzelunterschrift"
+
+msgctxt "selection:account.ebics.configuration,signature_class:"
+msgid "T - Transport Signature"
+msgstr "T - Transportunterschrift"
+
+msgctxt "selection:account.ebics.configuration,state:"
+msgid "Active"
+msgstr "Aktiv"
+
+msgctxt "selection:account.ebics.configuration,state:"
+msgid "Bank Keys Received"
+msgstr "Bankschlüssel empfangen"
+
+msgctxt "selection:account.ebics.configuration,state:"
+msgid "Draft"
+msgstr "Entwurf"
+
+msgctxt "selection:account.ebics.configuration,state:"
+msgid "INI Sent"
+msgstr "INI gesendet"
+
+msgctxt "selection:account.ebics.configuration,state:"
+msgid "Keys Generated"
+msgstr "Schlüssel erzeugt"
+
+msgctxt "selection:account.ebics.configuration,state:"
+msgid "Suspended"
+msgstr "Gesperrt"
+
+msgctxt "selection:account.ebics.format,container:"
+msgid "SVC"
+msgstr "SVC"
+
+msgctxt "selection:account.ebics.format,container:"
+msgid "XML"
+msgstr "XML"
+
+msgctxt "selection:account.ebics.format,container:"
+msgid "ZIP"
+msgstr "ZIP"
+
+msgctxt "selection:account.ebics.format,direction:"
+msgid "Download"
+msgstr "Download"
+
+msgctxt "selection:account.ebics.format,direction:"
+msgid "Upload"
+msgstr "Upload"
+
+msgctxt "selection:account.ebics.format,processing:"
+msgid "Import as Statement"
+msgstr "Import als Kontoauszug"
+
+msgctxt "selection:account.ebics.format,processing:"
+msgid "Store Only"
+msgstr "Nur Ablage"
+
+msgctxt "view:account.ebics.configuration:"
+msgid "Access"
+msgstr "Zugang"
+
+msgctxt "view:account.ebics.configuration:"
+msgid "Bank Certificates"
+msgstr "Zertifikate der Bank"
+
+msgctxt "view:account.ebics.configuration:"
+msgid "Keys"
+msgstr "Schlüssel"
+
+msgctxt "view:account.ebics.configuration:"
+msgid "User Certificates"
+msgstr "Eigene Zertifikate"
+
+msgctxt "view:account.ebics.format:"
+msgid "BTF Parameters"
+msgstr "BTF-Angabe"

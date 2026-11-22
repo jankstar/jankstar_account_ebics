@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <!-- account.ebics.format (FO01-FO03) -->
+        <record model="ir.message" id="msg_format_processing_required">
+            <field name="text">The download format "%(format)s" requires a processing.</field>
+        </record>
+        <record model="ir.message" id="msg_format_processing_download">
+            <field name="text">The processing of format "%(format)s" is only allowed for downloads.</field>
+        </record>
+        <record model="ir.message" id="msg_format_unique">
+            <field name="text">A format with the BTF parameters "%(btf)s" already exists (format "%(format)s").</field>
+        </record>
+        <record model="ir.message" id="msg_format_import_camt053">
+            <field name="text">Format "%(format)s" can only be imported as statement for message camt.053.</field>
+        </record>
+
+        <!-- account.ebics.configuration (KF01-KF03) -->
+        <record model="ir.message" id="msg_configuration_url_https">
+            <field name="text">The URL of EBICS connection "%(configuration)s" must start with "https://".</field>
+        </record>
+        <record model="ir.message" id="msg_configuration_participant_unique">
+            <field name="text">The combination of host ID, partner ID and user ID must be unique per company.</field>
+        </record>
+        <record model="ir.message" id="msg_configuration_hash_format">
+            <field name="text">The value of "%(field)s" of EBICS connection "%(configuration)s" must consist of 64 hexadecimal characters.</field>
+        </record>
+        <record model="ir.message" id="msg_configuration_format_unique">
+            <field name="text">A format can be added only once to an EBICS connection.</field>
+        </record>
+
+        <!-- account.ebics.account (KT01-KT03) -->
+        <record model="ir.message" id="msg_account_bank_account_unique">
+            <field name="text">A bank account can be released only once per EBICS connection.</field>
+        </record>
+        <record model="ir.message" id="msg_account_iban_required">
+            <field name="text">The bank account "%(bank_account)s" has no IBAN.</field>
+        </record>
+        <record model="ir.message" id="msg_account_company">
+            <field name="text">The company of account "%(account)s" must be the company of EBICS connection "%(configuration)s".</field>
+        </record>
+    </data>
+</tryton>

@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form>
+    <label name="name"/>
+    <field name="name"/>
+    <label name="active"/>
+    <field name="active" xexpand="0" width="25"/>
+
+    <label name="direction"/>
+    <field name="direction"/>
+    <label name="processing"/>
+    <field name="processing"/>
+
+    <separator string="BTF Parameters" colspan="4" id="btf"/>
+    <label name="service_name"/>
+    <field name="service_name"/>
+    <label name="scope"/>
+    <field name="scope"/>
+    <label name="service_option"/>
+    <field name="service_option"/>
+    <label name="container"/>
+    <field name="container"/>
+    <label name="msg_name"/>
+    <field name="msg_name"/>
+    <label name="msg_version"/>
+    <field name="msg_version"/>
+    <label name="btf_params"/>
+    <field name="btf_params" colspan="3"/>
+</form>

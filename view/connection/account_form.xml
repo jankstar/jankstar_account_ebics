@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form>
+    <label name="configuration"/>
+    <field name="configuration"/>
+    <label name="company"/>
+    <field name="company"/>
+    <label name="bank_account"/>
+    <field name="bank_account"/>
+    <label name="iban"/>
+    <field name="iban"/>
+    <label name="import_statements"/>
+    <field name="import_statements"/>
+    <label name="statement_journal"/>
+    <field name="statement_journal"/>
+</form>

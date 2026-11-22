@@ -1,0 +1,125 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="configuration_view_form">
+            <field name="model">account.ebics.configuration</field>
+            <field name="type">form</field>
+            <field name="name">connection/configuration_form</field>
+        </record>
+        <record model="ir.ui.view" id="configuration_view_list">
+            <field name="model">account.ebics.configuration</field>
+            <field name="type">tree</field>
+            <field name="name">connection/configuration_list</field>
+        </record>
+
+        <record model="ir.action.act_window" id="act_configuration_form">
+            <field name="name">EBICS Connections</field>
+            <field name="res_model">account.ebics.configuration</field>
+        </record>
+        <record model="ir.action.act_window.view" id="act_configuration_form_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="configuration_view_list"/>
+            <field name="act_window" ref="act_configuration_form"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_configuration_form_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="configuration_view_form"/>
+            <field name="act_window" ref="act_configuration_form"/>
+        </record>
+        <menuitem
+            parent="menu_ebics_configuration"
+            action="act_configuration_form"
+            sequence="10"
+            id="menu_configuration_form"/>
+
+        <record model="ir.model.access" id="access_configuration">
+            <field name="model">account.ebics.configuration</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_configuration_ebics">
+            <field name="model">account.ebics.configuration</field>
+            <field name="group" ref="group_ebics"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_configuration_ebics_admin">
+            <field name="model">account.ebics.configuration</field>
+            <field name="group" ref="group_ebics_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <record model="ir.model.access" id="access_configuration_format">
+            <field name="model">account.ebics.configuration-account.ebics.format</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_configuration_format_ebics">
+            <field name="model">account.ebics.configuration-account.ebics.format</field>
+            <field name="group" ref="group_ebics"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_configuration_format_ebics_admin">
+            <field name="model">account.ebics.configuration-account.ebics.format</field>
+            <field name="group" ref="group_ebics_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <!-- Key fields: no read or write access for anybody, only server
+             code (specification ch. 9) -->
+        <record model="ir.model.field.access" id="access_configuration_keyring_data">
+            <field name="model">account.ebics.configuration</field>
+            <field name="field">keyring_data</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+        </record>
+        <record model="ir.model.field.access" id="access_configuration_keyring_data_id">
+            <field name="model">account.ebics.configuration</field>
+            <field name="field">keyring_data_id</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+        </record>
+        <record model="ir.model.field.access" id="access_configuration_bank_keys_data">
+            <field name="model">account.ebics.configuration</field>
+            <field name="field">bank_keys_data</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+        </record>
+        <record model="ir.model.field.access" id="access_configuration_bank_keys_data_id">
+            <field name="model">account.ebics.configuration</field>
+            <field name="field">bank_keys_data_id</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+        </record>
+
+        <record model="ir.rule.group" id="rule_group_configuration_companies">
+            <field name="name">User in companies</field>
+            <field name="model">account.ebics.configuration</field>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_configuration_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_configuration_companies"/>
+        </record>
+    </data>
+</tryton>

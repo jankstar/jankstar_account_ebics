@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form>
+    <label name="name"/>
+    <field name="name"/>
+    <label name="state"/>
+    <field name="state"/>
+    <notebook colspan="4">
+        <page string="Access" id="access">
+            <label name="company"/>
+            <field name="company"/>
+            <label name="bank"/>
+            <field name="bank"/>
+            <label name="url"/>
+            <field name="url" colspan="3"/>
+            <label name="host_id"/>
+            <field name="host_id"/>
+            <label name="ebics_version"/>
+            <field name="ebics_version"/>
+            <label name="partner_id"/>
+            <field name="partner_id"/>
+            <label name="key_bitlength"/>
+            <field name="key_bitlength"/>
+            <label name="user_id"/>
+            <field name="user_id"/>
+            <label name="signature_class"/>
+            <field name="signature_class"/>
+            <label name="last_fetch"/>
+            <field name="last_fetch"/>
+        </page>
+        <page name="accounts">
+            <field name="accounts" colspan="4"/>
+        </page>
+        <page name="formats">
+            <field name="formats" colspan="4"/>
+        </page>
+        <page string="Keys" id="keys">
+            <label name="ini_sent"/>
+            <field name="ini_sent"/>
+            <label name="hia_sent"/>
+            <field name="hia_sent"/>
+            <separator string="User Certificates" colspan="4" id="user_keys"/>
+            <label name="user_a006_hash"/>
+            <field name="user_a006_hash" colspan="3"/>
+            <label name="user_x002_hash"/>
+            <field name="user_x002_hash" colspan="3"/>
+            <label name="user_e002_hash"/>
+            <field name="user_e002_hash" colspan="3"/>
+            <separator string="Bank Certificates" colspan="4" id="bank_keys"/>
+            <label name="bank_x002_hash"/>
+            <field name="bank_x002_hash" colspan="3"/>
+            <label name="bank_x002_hash_expected"/>
+            <field name="bank_x002_hash_expected" colspan="3"/>
+            <label name="bank_e002_hash"/>
+            <field name="bank_e002_hash" colspan="3"/>
+            <label name="bank_e002_hash_expected"/>
+            <field name="bank_e002_hash_expected" colspan="3"/>
+        </page>
+    </notebook>
+</form>
