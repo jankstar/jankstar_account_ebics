@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="res.group" id="group_ebics_admin">
+            <field name="name">EBICS Administration</field>
+        </record>
+        <record model="res.user-res.group" id="user_admin_group_ebics_admin">
+            <field name="user" ref="res.user_admin"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+
+        <record model="res.group" id="group_ebics">
+            <field name="name">EBICS</field>
+        </record>
+        <record model="res.user-res.group" id="user_admin_group_ebics">
+            <field name="user" ref="res.user_admin"/>
+            <field name="group" ref="group_ebics"/>
+        </record>
+    </data>
+</tryton>

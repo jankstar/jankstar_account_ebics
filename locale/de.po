@@ -1,0 +1,19 @@
+#
+msgid ""
+msgstr "Content-Type: text/plain; charset=utf-8\n"
+
+msgctxt "model:ir.ui.menu,name:menu_ebics"
+msgid "EBICS"
+msgstr "EBICS"
+
+msgctxt "model:ir.ui.menu,name:menu_ebics_configuration"
+msgid "EBICS"
+msgstr "EBICS"
+
+msgctxt "model:res.group,name:group_ebics"
+msgid "EBICS"
+msgstr "EBICS-Benutzer"
+
+msgctxt "model:res.group,name:group_ebics_admin"
+msgid "EBICS Administration"
+msgstr "EBICS-Administrator"
