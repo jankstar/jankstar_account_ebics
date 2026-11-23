@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form>
+    <label name="ebics_log"/>
+    <field name="ebics_log"/>
+    <label name="company"/>
+    <field name="company"/>
+    <label name="name"/>
+    <field name="name"/>
+    <label name="state"/>
+    <field name="state"/>
+    <label name="message_type"/>
+    <field name="message_type"/>
+    <label name="iban"/>
+    <field name="iban"/>
+    <label name="account"/>
+    <field name="account"/>
+    <label name="data"/>
+    <field name="data"/>
+    <label name="sha256"/>
+    <field name="sha256" colspan="3"/>
+    <notebook colspan="4">
+        <page name="statements">
+            <field name="statements" colspan="4"/>
+        </page>
+        <page name="error_message">
+            <field name="error_message" colspan="4"/>
+        </page>
+    </notebook>
+</form>

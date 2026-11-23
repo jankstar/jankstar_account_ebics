@@ -42,5 +42,25 @@ copyright notices and license terms. -->
         <record model="ir.message" id="msg_account_company">
             <field name="text">The company of account "%(account)s" must be the company of EBICS connection "%(configuration)s".</field>
         </record>
+        <record model="ir.message" id="msg_account_validity">
+            <field name="text">The start of validity of account "%(account)s" must not be after its end.</field>
+        </record>
+
+        <!-- account.ebics.log, account.ebics.log.file (PR01-PR05) -->
+        <record model="ir.message" id="msg_log_delete">
+            <field name="text">Records of "%(model)s" cannot be deleted.</field>
+        </record>
+        <record model="ir.message" id="msg_log_create">
+            <field name="text">Records of "%(model)s" are created only by the EBICS orders.</field>
+        </record>
+        <record model="ir.message" id="msg_log_write">
+            <field name="text">Records of "%(model)s" cannot be changed.</field>
+        </record>
+        <record model="ir.message" id="msg_log_write_fields">
+            <field name="text">The fields "%(fields)s" of "%(model)s" cannot be changed.</field>
+        </record>
+        <record model="ir.message" id="msg_log_copy">
+            <field name="text">Records of "%(model)s" cannot be copied.</field>
+        </record>
     </data>
 </tryton>

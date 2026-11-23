@@ -58,5 +58,8 @@ copyright notices and license terms. -->
             <label name="bank_e002_hash_expected"/>
             <field name="bank_e002_hash_expected" colspan="3"/>
         </page>
+        <page name="logs">
+            <field name="logs" colspan="4"/>
+        </page>
     </notebook>
 </form>

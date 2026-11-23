@@ -1,0 +1,168 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="log_view_form">
+            <field name="model">account.ebics.log</field>
+            <field name="type">form</field>
+            <field name="name">log/log_form</field>
+        </record>
+        <record model="ir.ui.view" id="log_view_list">
+            <field name="model">account.ebics.log</field>
+            <field name="type">tree</field>
+            <field name="name">log/log_list</field>
+        </record>
+
+        <record model="ir.action.act_window" id="act_log_form">
+            <field name="name">Logs</field>
+            <field name="res_model">account.ebics.log</field>
+        </record>
+        <record model="ir.action.act_window.view" id="act_log_form_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="log_view_list"/>
+            <field name="act_window" ref="act_log_form"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_log_form_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="log_view_form"/>
+            <field name="act_window" ref="act_log_form"/>
+        </record>
+        <menuitem
+            parent="menu_ebics"
+            action="act_log_form"
+            sequence="80"
+            id="menu_log_form"/>
+
+        <record model="ir.ui.view" id="log_file_view_form">
+            <field name="model">account.ebics.log.file</field>
+            <field name="type">form</field>
+            <field name="name">log/log_file_form</field>
+        </record>
+        <record model="ir.ui.view" id="log_file_view_list">
+            <field name="model">account.ebics.log.file</field>
+            <field name="type">tree</field>
+            <field name="name">log/log_file_list</field>
+        </record>
+
+        <record model="ir.action.act_window" id="act_log_file_form">
+            <field name="name">Received Files</field>
+            <field name="res_model">account.ebics.log.file</field>
+        </record>
+        <record model="ir.action.act_window.view" id="act_log_file_form_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="log_file_view_list"/>
+            <field name="act_window" ref="act_log_file_form"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_log_file_form_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="log_file_view_form"/>
+            <field name="act_window" ref="act_log_file_form"/>
+        </record>
+        <menuitem
+            parent="menu_ebics"
+            action="act_log_file_form"
+            sequence="90"
+            id="menu_log_file_form"/>
+
+        <!-- Read only for both groups; records are created and changed
+             only by the server code (PR01-PR05) -->
+        <record model="ir.model.access" id="access_log">
+            <field name="model">account.ebics.log</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_log_ebics">
+            <field name="model">account.ebics.log</field>
+            <field name="group" ref="group_ebics"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_log_ebics_admin">
+            <field name="model">account.ebics.log</field>
+            <field name="group" ref="group_ebics_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+
+        <record model="ir.model.access" id="access_log_file">
+            <field name="model">account.ebics.log.file</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_log_file_ebics">
+            <field name="model">account.ebics.log.file</field>
+            <field name="group" ref="group_ebics"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_log_file_ebics_admin">
+            <field name="model">account.ebics.log.file</field>
+            <field name="group" ref="group_ebics_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+
+        <record model="ir.model.access" id="access_log_file_statement">
+            <field name="model">account.ebics.log.file-account.statement</field>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_log_file_statement_ebics">
+            <field name="model">account.ebics.log.file-account.statement</field>
+            <field name="group" ref="group_ebics"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_log_file_statement_ebics_admin">
+            <field name="model">account.ebics.log.file-account.statement</field>
+            <field name="group" ref="group_ebics_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+
+        <record model="ir.rule.group" id="rule_group_log_companies">
+            <field name="name">User in companies</field>
+            <field name="model">account.ebics.log</field>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_log_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_log_companies"/>
+        </record>
+
+        <record model="ir.rule.group" id="rule_group_log_file_companies">
+            <field name="name">User in companies</field>
+            <field name="model">account.ebics.log.file</field>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_log_file_companies">
+            <field name="domain"
+                eval="[('ebics_log.company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_log_file_companies"/>
+        </record>
+
+    </data>
+</tryton>

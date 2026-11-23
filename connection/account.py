@@ -2,14 +2,16 @@
 # The COPYRIGHT file at the top level of this repository contains the full
 # copyright notices and license terms.
 from trytond.i18n import gettext
-from trytond.model import ModelSQL, ModelView, Unique, fields
+from trytond.model import DeactivableMixin, ModelSQL, ModelView, Unique, fields
 from trytond.model.exceptions import ValidationError
 from trytond.pool import Pool
 from trytond.pyson import Eval
 from trytond.transaction import without_check_access
 
+from ..core.history import HistoryMixin
 
-class Account(ModelSQL, ModelView):
+
+class Account(DeactivableMixin, HistoryMixin, ModelSQL, ModelView):
     __name__ = 'account.ebics.account'
     __string__ = "EBICS Account"
 
@@ -37,6 +39,14 @@ class Account(ModelSQL, ModelView):
         help="Active bank account of the company with an IBAN.")
     iban = fields.Function(
         fields.Char("IBAN"), 'on_change_with_iban', searcher='search_iban')
+    valid_from = fields.Date(
+        "Valid From",
+        help="First statement date imported for this account.\n"
+        "Leave empty for no limit.")
+    valid_to = fields.Date(
+        "Valid To",
+        help="Last statement date imported for this account.\n"
+        "Leave empty for no limit.")
     import_statements = fields.Boolean(
         "Import Statements",
         help="Import the camt.053 statements of this account.")
@@ -133,6 +143,7 @@ class Account(ModelSQL, ModelView):
         super().validate_fields(accounts, field_names)
         cls.check_iban(accounts, field_names)
         cls.check_company(accounts, field_names)
+        cls.check_validity(accounts, field_names)
 
     @classmethod
     def check_iban(cls, accounts, field_names=None):
@@ -157,6 +168,18 @@ class Account(ModelSQL, ModelView):
                         'account_ebics.msg_account_company',
                         account=account.rec_name,
                         configuration=account.configuration.rec_name))
+
+    @classmethod
+    def check_validity(cls, accounts, field_names=None):
+        # KT04
+        if field_names and not (field_names & {'valid_from', 'valid_to'}):
+            return
+        for account in accounts:
+            if (account.valid_from and account.valid_to
+                    and account.valid_from > account.valid_to):
+                raise ValidationError(gettext(
+                        'account_ebics.msg_account_validity',
+                        account=account.rec_name))
 
     def get_rec_name(self, name):
         return '%s - %s' % (

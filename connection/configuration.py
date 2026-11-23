@@ -10,6 +10,8 @@ from trytond.pool import Pool
 from trytond.pyson import Eval
 from trytond.transaction import Transaction
 
+from ..core.history import HistoryMixin
+
 STATES = [
     ('draft', "Draft"),
     ('keys_generated', "Keys Generated"),
@@ -36,7 +38,7 @@ def normalize_hash(value):
     return value or None
 
 
-class Configuration(ModelSQL, ModelView):
+class Configuration(HistoryMixin, ModelSQL, ModelView):
     __name__ = 'account.ebics.configuration'
     __string__ = "EBICS Connection"
 
@@ -110,6 +112,8 @@ class Configuration(ModelSQL, ModelView):
         STATES, "State", required=True, readonly=True, sort=False)
     accounts = fields.One2Many(
         'account.ebics.account', 'configuration', "Accounts")
+    logs = fields.One2Many(
+        'account.ebics.log', 'configuration', "Logs", readonly=True)
 
     @classmethod
     def __setup__(cls):
@@ -224,10 +228,11 @@ class Configuration(ModelSQL, ModelView):
         default.setdefault('hia_sent', False)
         default.setdefault('state', 'draft')
         default.setdefault('accounts', None)
+        default.setdefault('logs', None)
         return super().copy(configurations, default=default)
 
 
-class ConfigurationFormat(ModelSQL):
+class ConfigurationFormat(HistoryMixin, ModelSQL):
     __name__ = 'account.ebics.configuration-account.ebics.format'
     __string__ = "EBICS Connection - Format"
 

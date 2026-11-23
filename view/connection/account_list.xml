@@ -7,6 +7,9 @@ copyright notices and license terms. -->
     <field name="bank_account" expand="1"/>
     <field name="iban" expand="1"/>
     <field name="company" expand="1"/>
+    <field name="valid_from"/>
+    <field name="valid_to"/>
     <field name="import_statements"/>
     <field name="statement_journal" expand="1"/>
+    <field name="active"/>
 </tree>

@@ -1,6 +1,9 @@
 # This file is part of the account_ebics module for Tryton.
 # The COPYRIGHT file at the top level of this repository contains the full
 # copyright notices and license terms.
+import datetime
+import hashlib
+
 from trytond.exceptions import UserError
 from trytond.model.exceptions import AccessError
 from trytond.modules.account.tests import create_chart
@@ -62,6 +65,75 @@ def format_values(**values):
     return result
 
 
+# Invented test files (no real statements)
+TEST_FILES = [
+    {'name': 'statement-1.xml', 'data': b'<Document>test 1</Document>',
+        'message_type': 'camt.053.001.08', 'iban': TEST_IBAN},
+    {'name': 'statement-2.xml', 'data': b'<Document>test 2</Document>',
+        'message_type': 'camt.053.001.08', 'iban': TEST_IBAN_2},
+    ]
+
+
+def create_log(company, configuration=None, **values):
+    "Create a log with the camt.053 format and the two test files"
+    pool = Pool()
+    Configuration = pool.get('account.ebics.configuration')
+    Log = pool.get('account.ebics.log')
+    ModelData = pool.get('ir.model.data')
+    if configuration is None:
+        configuration, = Configuration.create([configuration_values(
+                    company)])
+    log_values = {
+        'format': ModelData.get_id('account_ebics', 'format_camt053_de'),
+        'state': 'done',
+        'transaction_id': 'TESTTRANSACTION',
+        'technical_return_code': '000000',
+        'business_return_code': '000000',
+        'payload': b'PK test container',
+        }
+    log_values.update(values)
+    return Log.record(configuration, 'BTD', log_values, files=TEST_FILES)
+
+
+def create_user(login, company, groups):
+    pool = Pool()
+    User = pool.get('res.user')
+    ModelData = pool.get('ir.model.data')
+    user, = User.create([{
+                'name': login,
+                'login': login,
+                'companies': [('add', [company.id])],
+                'company': company.id,
+                'groups': [('add', [
+                            ModelData.get_id('account_ebics', g)
+                            for g in groups])],
+                }])
+    return user
+
+
+def as_user(user):
+    "Context of a client call of the user"
+    User = Pool().get('res.user')
+    transaction = Transaction()
+    with transaction.set_user(user.id):
+        context = User.get_preferences(context_only=True)
+    return transaction.set_user(user.id), transaction.set_context(
+        context, _check_access=True)
+
+
+def backdate(Model, records,
+        timestamp=datetime.datetime(2000, 1, 1, 0, 0, 0, 1)):
+    """Move the creation of the records to an earlier transaction: within one
+    test transaction creation and change have the same timestamp and form
+    only one revision"""
+    cursor = Transaction().connection.cursor()
+    ids = [r.id for r in records]
+    for table in [Model.__table__(), Model.__table_history__()]:
+        cursor.execute(*table.update(
+                [table.create_date], [timestamp],
+                where=table.id.in_(ids)))
+
+
 class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
     "Test Account EBICS module"
     module = 'account_ebics'
@@ -75,7 +147,8 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
             with self.subTest(check=check):
                 with self.assertRaises(exception) as cm:
                     action()
-                self.assertIn(expected, str(cm.exception))
+                if expected is not None:
+                    self.assertIn(expected, str(cm.exception))
         run()
 
     # T2
@@ -552,6 +625,473 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
             # group_ebics may read but not change
             with self.assertRaises(AccessError):
                 Configuration.write([config_a], {'name': "Changed"})
+
+    # E05 T2
+    @with_transaction()
+    def test_log_record(self):
+        "Log.record creates the log with its files"
+        company = create_company()
+        with set_company(company):
+            log = create_log(company)
+        self.assertEqual(log.company, company)
+        self.assertEqual(log.order_type, 'BTD')
+        self.assertEqual(log.btf_params, 'EOP/DE/camt.053/ZIP')
+        self.assertEqual(log.receipt, 'none')
+        self.assertEqual(log.state, 'done')
+        self.assertEqual(log.payload_filename, 'BTD-%s.zip' % log.id)
+        self.assertEqual(bytes(log.payload), b'PK test container')
+        self.assertEqual(len(log.files), 2)
+        files = sorted(log.files, key=lambda f: f.name)
+        for file_, values in zip(files, TEST_FILES):
+            with self.subTest(file=values['name']):
+                self.assertEqual(file_.company, company)
+                self.assertEqual(file_.timestamp, log.timestamp)
+                self.assertEqual(
+                    file_.sha256,
+                    hashlib.sha256(values['data']).hexdigest())
+                self.assertEqual(file_.message_type, 'camt.053.001.08')
+                self.assertEqual(file_.iban, values['iban'])
+                self.assertEqual(file_.state, 'pending')
+                self.assertIsNone(file_.account)
+
+    @with_transaction()
+    def test_log_record_btf_params_given(self):
+        "Log.record keeps the BTF parameters actually sent"
+        company = create_company()
+        with set_company(company):
+            log = create_log(company, btf_params='EOP/DE/camt.053/ZIP/X')
+            self.assertEqual(log.btf_params, 'EOP/DE/camt.053/ZIP/X')
+
+    # E05 T3
+    def test_log_delete(self):
+        "PR01: logs and files cannot be deleted, not even by server code"
+        def delete(model, client=False):
+            def action():
+                pool = Pool()
+                Model = pool.get(model)
+                company = create_company()
+                with set_company(company):
+                    log = create_log(company)
+                records = [log] if model == 'account.ebics.log' else log.files
+                if client:
+                    user = create_user(
+                        'ebics_admin', company, ['group_ebics_admin'])
+                    set_user, set_context = as_user(user)
+                    with set_user, set_context:
+                        Model.delete(Model.browse(records))
+                else:
+                    Model.delete(records)
+            return action
+
+        for model in ['account.ebics.log', 'account.ebics.log.file']:
+            self.assertRejected(
+                'PR01 server %s' % model, delete(model), 'cannot be deleted',
+                AccessError)
+            self.assertRejected(
+                'PR01 client %s' % model, delete(model, client=True), None,
+                AccessError)
+
+    # E05 T4
+    def test_log_client(self):
+        "PR02, PR04: no change or creation from the client"
+        def client(model, operation):
+            def action():
+                pool = Pool()
+                Model = pool.get(model)
+                Configuration = pool.get('account.ebics.configuration')
+                company = create_company()
+                with set_company(company):
+                    log = create_log(company)
+                user = create_user(
+                    'ebics_admin', company, ['group_ebics_admin'])
+                set_user, set_context = as_user(user)
+                with set_user, set_context:
+                    if operation == 'write':
+                        records = (
+                            [log] if model == 'account.ebics.log'
+                            else list(log.files))
+                        Model.write(Model.browse(records), {'state': 'error'})
+                    elif model == 'account.ebics.log':
+                        configuration = Configuration(log.configuration.id)
+                        Model.create([{
+                                    'configuration': configuration.id,
+                                    'company': company.id,
+                                    'order_type': 'BTD',
+                                    'state': 'done',
+                                    }])
+                    else:
+                        Model.create([{
+                                    'ebics_log': log.id, 'name': 'x.xml'}])
+            return action
+
+        for model in ['account.ebics.log', 'account.ebics.log.file']:
+            for operation in ['write', 'create']:
+                self.assertRejected(
+                    'PR02/PR04 %s %s' % (operation, model),
+                    client(model, operation), None, AccessError)
+
+    @with_transaction()
+    def test_log_check_modification_external(self):
+        "PR02, PR04: own check also without access rights check"
+        pool = Pool()
+        Log = pool.get('account.ebics.log')
+        LogFile = pool.get('account.ebics.log.file')
+        company = create_company()
+        with set_company(company):
+            log = create_log(company)
+        for Model, records in [(Log, [log]), (LogFile, list(log.files))]:
+            with self.subTest(model=Model.__name__):
+                with self.assertRaises(AccessError) as cm:
+                    Model.check_modification(
+                        'write', records, {'state': 'error'}, external=True)
+                self.assertIn('cannot be changed', str(cm.exception))
+                with self.assertRaises(AccessError) as cm:
+                    Model.check_modification(
+                        'create', records, external=True)
+                self.assertIn('created only by', str(cm.exception))
+
+    # E05 T5
+    @with_transaction()
+    def test_log_write_internal_allowed(self):
+        "PR03: the server code may change the status fields"
+        pool = Pool()
+        Log = pool.get('account.ebics.log')
+        LogFile = pool.get('account.ebics.log.file')
+        Account = pool.get('account.ebics.account')
+        company = create_company()
+        with set_company(company):
+            log = create_log(company)
+            account, = Account.create([{
+                        'configuration': log.configuration.id,
+                        'bank_account': create_bank_account(company).id,
+                        }])
+        Log.write_internal([log], {'state': 'error', 'receipt': 'positive'})
+        self.assertEqual((log.state, log.receipt), ('error', 'positive'))
+        file_ = log.files[0]
+        LogFile.write_internal([file_], {
+                'state': 'error',
+                'account': account.id,
+                'error_message': "Test error",
+                })
+        self.assertEqual(file_.state, 'error')
+        self.assertEqual(file_.account, account)
+        self.assertEqual(file_.error_message, "Test error")
+
+    def test_log_write_internal_forbidden(self):
+        "PR03: other fields are rejected also in server code"
+        def write(model, values):
+            def action():
+                Model = Pool().get(model)
+                company = create_company()
+                with set_company(company):
+                    log = create_log(company)
+                records = (
+                    [log] if model == 'account.ebics.log'
+                    else list(log.files))
+                Model.write_internal(records, values)
+            return action
+
+        for model, values in [
+                ('account.ebics.log', {'technical_return_code': '091002'}),
+                ('account.ebics.log', {'business_return_code': '090005'}),
+                ('account.ebics.log', {'btf_params': 'X'}),
+                ('account.ebics.log', {'payload': b'x'}),
+                ('account.ebics.log',
+                    {'state': 'error', 'return_message': 'x'}),
+                ('account.ebics.log.file', {'message_type': 'camt.052'}),
+                ('account.ebics.log.file', {'iban': TEST_IBAN_2}),
+                ('account.ebics.log.file', {'data': b'x'}),
+                ('account.ebics.log.file', {'sha256': '0' * 64}),
+                ]:
+            self.assertRejected(
+                'PR03 %s %s' % (model, sorted(values)), write(model, values),
+                'cannot be changed', AccessError)
+
+    # E05 T6
+    @with_transaction()
+    def test_log_copy(self):
+        "PR05: logs and files cannot be copied"
+        pool = Pool()
+        Log = pool.get('account.ebics.log')
+        LogFile = pool.get('account.ebics.log.file')
+        company = create_company()
+        with set_company(company):
+            log = create_log(company)
+        for Model, records in [(Log, [log]), (LogFile, list(log.files))]:
+            with self.subTest(model=Model.__name__):
+                with self.assertRaises(AccessError) as cm:
+                    Model.copy(records)
+                self.assertIn('cannot be copied', str(cm.exception))
+
+    # E05 T7
+    def test_log_configuration_delete(self):
+        "F1: a configuration with logs cannot be deleted"
+        def delete():
+            Configuration = Pool().get('account.ebics.configuration')
+            company = create_company()
+            with set_company(company):
+                log = create_log(company)
+            Configuration.delete([log.configuration])
+        self.assertRejected(
+            'F1 delete configuration with log', delete,
+            'used by field "Connection" of "EBICS Log"')
+
+    @with_transaction()
+    def test_configuration_delete_without_log(self):
+        "A configuration without logs can still be deleted"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        company = create_company()
+        with set_company(company):
+            configuration, = Configuration.create([configuration_values(
+                        company)])
+            Configuration.delete([configuration])
+
+    # E05 T8
+    @with_transaction()
+    def test_log_file_statement_delete(self):
+        "Deleting a draft statement removes only the link"
+        pool = Pool()
+        LogFile = pool.get('account.ebics.log.file')
+        Statement = pool.get('account.statement')
+        StatementJournal = pool.get('account.statement.journal')
+        AccountJournal = pool.get('account.journal')
+        AccountAccount = pool.get('account.account')
+        company = create_company()
+        with set_company(company):
+            create_chart(company)
+            log = create_log(company)
+            cash, = AccountAccount.search([
+                    ('type', '!=', None),
+                    ('closed', '!=', True),
+                    ('company', '=', company.id),
+                    ('party_required', '=', False),
+                    ], limit=1)
+            account_journal, = AccountJournal.search(
+                [('code', '=', 'STA')], limit=1)
+            journal, = StatementJournal.create([{
+                        'name': "Test statement journal",
+                        'journal': account_journal.id,
+                        'account': cash.id,
+                        'currency': company.currency.id,
+                        'company': company.id,
+                        'validation': 'number_of_lines',
+                        }])
+            statement, = Statement.create([{
+                        'name': "Test statement",
+                        'company': company.id,
+                        'journal': journal.id,
+                        'date': datetime.date.today(),
+                        'number_of_lines': 0,
+                        }])
+            file_ = log.files[0]
+            LogFile.write_internal([file_], {
+                    'state': 'imported',
+                    'statements': [('add', [statement.id])],
+                    })
+            self.assertEqual(list(file_.statements), [statement])
+
+            Statement.delete([statement])
+            file_ = LogFile(file_.id)
+            self.assertEqual(list(file_.statements), [])
+            self.assertEqual(file_.state, 'imported')
+
+    # E05 T9
+    @with_transaction()
+    def test_log_company_rule(self):
+        "Logs and files of another company are not visible"
+        pool = Pool()
+        Log = pool.get('account.ebics.log')
+        LogFile = pool.get('account.ebics.log.file')
+        company_a = create_company("Company A")
+        company_b = create_company("Company B")
+        log_a = create_log(company_a)
+        create_log(company_b)
+        user = create_user('ebics_user', company_a, ['group_ebics'])
+        set_user, set_context = as_user(user)
+        with set_user, set_context:
+            self.assertEqual(Log.search([]), [log_a])
+            self.assertEqual(
+                sorted(LogFile.search([])), sorted(log_a.files))
+            Log.read([log_a.id], ['state', 'payload'])
+
+    # E05 T10
+    @with_transaction()
+    def test_history(self):
+        "Changes create revisions; earlier versions remain readable"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        Account = pool.get('account.ebics.account')
+        Format = pool.get('account.ebics.format')
+        LogFile = pool.get('account.ebics.log.file')
+        Relation = pool.get(
+            'account.ebics.configuration-account.ebics.format')
+        company = create_company()
+        with set_company(company):
+            log = create_log(company)
+            configuration = log.configuration
+            account, = Account.create([{
+                        'configuration': configuration.id,
+                        'bank_account': create_bank_account(company).id,
+                        }])
+            format_, = Format.create([format_values()])
+            file_ = log.files[0]
+
+            for Model, record, field, old, new, write in [
+                    (Configuration, configuration, 'name', "Test access",
+                        "Renamed", Configuration.write),
+                    (Account, account, 'import_statements', True, False,
+                        Account.write),
+                    # not 'name': translated fields are not in the history
+                    (Format, format_, 'scope', 'DE', 'AT', Format.write),
+                    (LogFile, file_, 'state', 'pending', 'error',
+                        LogFile.write_internal),
+                    ]:
+                with self.subTest(model=Model.__name__):
+                    created = Model.history_revisions([record.id])
+                    self.assertEqual(len(created), 1)
+                    backdate(Model, [record])
+                    write([record], {field: new})
+                    revisions = Model.history_revisions([record.id])
+                    self.assertEqual(len(revisions), 2)
+                    first = revisions[-1][0]
+                    with Transaction().set_context(_datetime=first):
+                        self.assertEqual(
+                            getattr(Model(record.id), field), old)
+                    self.assertEqual(getattr(Model(record.id), field), new)
+
+            relations = Relation.search(
+                [('configuration', '=', configuration.id)])
+            self.assertTrue(
+                Relation.history_revisions([r.id for r in relations]))
+
+    @with_transaction()
+    def test_history_key_fields_no_access(self):
+        "The key fields stay inaccessible in earlier versions"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        company = create_company()
+        with set_company(company):
+            configuration, = Configuration.create([configuration_values(
+                        company)])
+            backdate(Configuration, [configuration])
+            Configuration.write([configuration], {'name': "Renamed"})
+        revisions = Configuration.history_revisions([configuration.id])
+        user = create_user('ebics_admin', company, ['group_ebics_admin'])
+        set_user, set_context = as_user(user)
+        with set_user, set_context, \
+                Transaction().set_context(_datetime=revisions[-1][0]):
+            self.assertEqual(
+                Configuration.read([configuration.id], ['name'])[0]['name'],
+                "Test access")
+            with self.assertRaises(AccessError):
+                Configuration.read([configuration.id], ['keyring_data'])
+
+    # E05 T11
+    @with_transaction()
+    def test_log_write_internal_logged(self):
+        "Internal changes are recorded in ir.model.log"
+        pool = Pool()
+        LogFile = pool.get('account.ebics.log.file')
+        ModelLog = pool.get('ir.model.log')
+        company = create_company()
+        with set_company(company):
+            log = create_log(company)
+        file_ = log.files[0]
+        LogFile.write_internal([file_], {'state': 'duplicate'})
+        Transaction()._store_log_records()
+        entries = ModelLog.search([
+                ('resource', '=', str(file_)),
+                ('event', '=', 'write'),
+                ])
+        self.assertEqual(len(entries), 1)
+        entry, = entries
+        self.assertEqual(entry.target, 'state')
+        self.assertEqual(entry.user.id, Transaction().user)
+
+    # E05 T12
+    @with_transaction()
+    def test_account_archive(self):
+        "An archived account is no longer selectable"
+        pool = Pool()
+        Account = pool.get('account.ebics.account')
+        Configuration = pool.get('account.ebics.configuration')
+        company = create_company()
+        with set_company(company):
+            configuration, = Configuration.create([configuration_values(
+                        company)])
+            account, = Account.create([{
+                        'configuration': configuration.id,
+                        'bank_account': create_bank_account(company).id,
+                        }])
+            self.assertTrue(account.active)
+            self.assertIsNone(account.valid_from)
+            self.assertIsNone(account.valid_to)
+            Account.write([account], {'active': False})
+            self.assertEqual(Account.search([]), [])
+            self.assertEqual(
+                Account.search([('active', '=', False)]), [account])
+            Account.write([account], {
+                    'valid_from': datetime.date(2026, 1, 1),
+                    'valid_to': datetime.date(2026, 1, 1),
+                    })
+
+    def test_account_validity_and_delete(self):
+        "KT04, KT01 for archived accounts and deletion of used accounts"
+        def create(valid_from=None, valid_to=None, archived_twice=False,
+                use=False, delete=False):
+            def action():
+                pool = Pool()
+                Account = pool.get('account.ebics.account')
+                LogFile = pool.get('account.ebics.log.file')
+                company = create_company()
+                with set_company(company):
+                    log = create_log(company)
+                    values = {
+                        'configuration': log.configuration.id,
+                        'bank_account': create_bank_account(company).id,
+                        'valid_from': valid_from,
+                        'valid_to': valid_to,
+                        }
+                    account, = Account.create([values])
+                    if archived_twice:
+                        Account.write([account], {'active': False})
+                        Account.create([values])
+                    if use:
+                        LogFile.write_internal(
+                            [log.files[0]], {'account': account.id})
+                    if delete:
+                        Account.delete([account])
+            return action
+
+        self.assertRejected(
+            'KT04 from after to',
+            create(datetime.date(2026, 2, 1), datetime.date(2026, 1, 31)),
+            'must not be after its end')
+        self.assertRejected(
+            'KT01 archived account', create(archived_twice=True), 'only once')
+        self.assertRejected(
+            'delete used account', create(use=True, delete=True),
+            'used by field "Account" of "EBICS Received File"')
+
+    @with_transaction()
+    def test_account_delete_unused(self):
+        "An unused account can be deleted"
+        pool = Pool()
+        Account = pool.get('account.ebics.account')
+        Configuration = pool.get('account.ebics.configuration')
+        company = create_company()
+        with set_company(company):
+            configuration, = Configuration.create([configuration_values(
+                        company)])
+            account, = Account.create([{
+                        'configuration': configuration.id,
+                        'bank_account': create_bank_account(company).id,
+                        'valid_from': datetime.date(2026, 1, 1),
+                        }])
+            Account.delete([account])
+            self.assertEqual(
+                Account.search([('active', 'in', [True, False])]), [])
 
 
 del ModuleTestCase

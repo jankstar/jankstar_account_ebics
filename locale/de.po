@@ -30,6 +30,14 @@ msgctxt "field:account.ebics.account,statement_journal:"
 msgid "Statement Journal"
 msgstr "Kontoauszugsjournal"
 
+msgctxt "field:account.ebics.account,valid_from:"
+msgid "Valid From"
+msgstr "Gültig ab"
+
+msgctxt "field:account.ebics.account,valid_to:"
+msgid "Valid To"
+msgstr "Gültig bis"
+
 msgctxt "field:account.ebics.configuration,accounts:"
 msgid "Accounts"
 msgstr "Konten"
@@ -101,6 +109,10 @@ msgstr "Schlüsselbund-ID"
 msgctxt "field:account.ebics.configuration,last_fetch:"
 msgid "Last Fetch"
 msgstr "Letzter Abruf"
+
+msgctxt "field:account.ebics.configuration,logs:"
+msgid "Logs"
+msgstr "Protokoll"
 
 msgctxt "field:account.ebics.configuration,name:"
 msgid "Name"
@@ -186,6 +198,142 @@ msgctxt "field:account.ebics.format,service_option:"
 msgid "Service Option"
 msgstr "Service-Option"
 
+msgctxt "field:account.ebics.log,btf_params:"
+msgid "BTF Parameters"
+msgstr "BTF-Angabe"
+
+msgctxt "field:account.ebics.log,business_return_code:"
+msgid "Business Return Code"
+msgstr "Fachlicher Rückgabecode"
+
+msgctxt "field:account.ebics.log,company:"
+msgid "Company"
+msgstr "Unternehmen"
+
+msgctxt "field:account.ebics.log,configuration:"
+msgid "Connection"
+msgstr "Zugang"
+
+msgctxt "field:account.ebics.log,date_from:"
+msgid "From Date"
+msgstr "Von"
+
+msgctxt "field:account.ebics.log,date_to:"
+msgid "To Date"
+msgstr "Bis"
+
+msgctxt "field:account.ebics.log,ebics_order_id:"
+msgid "Order ID"
+msgstr "Auftragsnummer"
+
+msgctxt "field:account.ebics.log,files:"
+msgid "Files"
+msgstr "Dateien"
+
+msgctxt "field:account.ebics.log,format:"
+msgid "Format"
+msgstr "Format"
+
+msgctxt "field:account.ebics.log,order_type:"
+msgid "Order Type"
+msgstr "Auftragsart"
+
+msgctxt "field:account.ebics.log,payload:"
+msgid "Payload"
+msgstr "Nutzdaten"
+
+msgctxt "field:account.ebics.log,payload_filename:"
+msgid "Payload File Name"
+msgstr "Dateiname Nutzdaten"
+
+msgctxt "field:account.ebics.log,payload_id:"
+msgid "Payload ID"
+msgstr "Nutzdaten-ID"
+
+msgctxt "field:account.ebics.log,receipt:"
+msgid "Receipt"
+msgstr "Quittung"
+
+msgctxt "field:account.ebics.log,return_message:"
+msgid "Return Message"
+msgstr "Rückmeldung"
+
+msgctxt "field:account.ebics.log,state:"
+msgid "State"
+msgstr "Status"
+
+msgctxt "field:account.ebics.log,technical_return_code:"
+msgid "Technical Return Code"
+msgstr "Technischer Rückgabecode"
+
+msgctxt "field:account.ebics.log,timestamp:"
+msgid "Timestamp"
+msgstr "Zeitpunkt"
+
+msgctxt "field:account.ebics.log,transaction_id:"
+msgid "Transaction ID"
+msgstr "Transaktions-ID"
+
+msgctxt "field:account.ebics.log.file,account:"
+msgid "Account"
+msgstr "Konto"
+
+msgctxt "field:account.ebics.log.file,company:"
+msgid "Company"
+msgstr "Unternehmen"
+
+msgctxt "field:account.ebics.log.file,data:"
+msgid "Data"
+msgstr "Daten"
+
+msgctxt "field:account.ebics.log.file,data_id:"
+msgid "Data ID"
+msgstr "Daten-ID"
+
+msgctxt "field:account.ebics.log.file,ebics_log:"
+msgid "Log"
+msgstr "Protokoll"
+
+msgctxt "field:account.ebics.log.file,error_message:"
+msgid "Error Message"
+msgstr "Fehlermeldung"
+
+msgctxt "field:account.ebics.log.file,iban:"
+msgid "IBAN"
+msgstr "IBAN"
+
+msgctxt "field:account.ebics.log.file,message_type:"
+msgid "Message Type"
+msgstr "Nachrichtentyp"
+
+msgctxt "field:account.ebics.log.file,name:"
+msgid "Name"
+msgstr "Name"
+
+msgctxt "field:account.ebics.log.file,sha256:"
+msgid "SHA-256"
+msgstr "SHA-256"
+
+msgctxt "field:account.ebics.log.file,state:"
+msgid "State"
+msgstr "Status"
+
+msgctxt "field:account.ebics.log.file,statements:"
+msgid "Statements"
+msgstr "Auszüge"
+
+msgctxt "field:account.ebics.log.file,timestamp:"
+msgid "Timestamp"
+msgstr "Zeitpunkt"
+
+msgctxt "field:account.ebics.log.file-account.statement,file:"
+msgid "File"
+msgstr "Datei"
+
+msgctxt "field:account.ebics.log.file-account.statement,statement:"
+msgid "Statement"
+msgstr "Auszug"
+
 msgctxt "help:account.ebics.account,bank_account:"
 msgid "Active bank account of the company with an IBAN."
 msgstr "Aktives Bankkonto des Unternehmens mit IBAN."
@@ -205,6 +353,22 @@ msgid ""
 msgstr ""
 "Das Kontoauszugsjournal, das account_statement_sepa über IBAN und Währung des Bankkontos findet.\n"
 "Ist das Feld leer, passt kein oder mehr als ein Journal; Auszüge können dann nicht importiert werden."
+
+msgctxt "help:account.ebics.account,valid_from:"
+msgid ""
+"First statement date imported for this account.\n"
+"Leave empty for no limit."
+msgstr ""
+"Erstes Auszugsdatum, das für dieses Konto importiert wird.\n"
+"Leer lassen für keine Begrenzung."
+
+msgctxt "help:account.ebics.account,valid_to:"
+msgid ""
+"Last statement date imported for this account.\n"
+"Leave empty for no limit."
+msgstr ""
+"Letztes Auszugsdatum, das für dieses Konto importiert wird.\n"
+"Leer lassen für keine Begrenzung."
 
 msgctxt "help:account.ebics.configuration,bank_e002_hash_expected:"
 msgid ""
@@ -270,6 +434,30 @@ msgctxt "help:account.ebics.format,service_option:"
 msgid "BTF service option, e.g. COR, VOO1."
 msgstr "BTF-Service-Option, z. B. COR, VOO1."
 
+msgctxt "help:account.ebics.log,btf_params:"
+msgid "The BTF parameters actually sent to the bank."
+msgstr "Die tatsächlich an die Bank gesendete BTF-Angabe."
+
+msgctxt "help:account.ebics.log,order_type:"
+msgid "E.g. INI, HIA, HPB, BTD."
+msgstr "Z. B. INI, HIA, HPB, BTD."
+
+msgctxt "help:account.ebics.log,payload:"
+msgid "Container received from or data sent to the bank."
+msgstr "Von der Bank empfangener Container bzw. an die Bank gesendete Daten."
+
+msgctxt "help:account.ebics.log,receipt:"
+msgid "Receipt of the download sent to the bank."
+msgstr "An die Bank gesendete Quittung des Downloads."
+
+msgctxt "help:account.ebics.log.file,message_type:"
+msgid "E.g. camt.053.001.08."
+msgstr "Z. B. camt.053.001.08."
+
+msgctxt "help:account.ebics.log.file,sha256:"
+msgid "Hash value of the data to detect duplicates."
+msgstr "Hashwert der Daten zur Erkennung von Dubletten."
+
 msgctxt "model:account.ebics.account,string:"
 msgid "EBICS Account"
 msgstr "EBICS-Konto"
@@ -298,6 +486,18 @@ msgctxt "model:account.ebics.format,string:"
 msgid "EBICS Format"
 msgstr "EBICS-Format"
 
+msgctxt "model:account.ebics.log,string:"
+msgid "EBICS Log"
+msgstr "EBICS-Protokoll"
+
+msgctxt "model:account.ebics.log.file,string:"
+msgid "EBICS Received File"
+msgstr "EBICS empfangene Datei"
+
+msgctxt "model:account.ebics.log.file-account.statement,string:"
+msgid "EBICS Received File - Statement"
+msgstr "EBICS empfangene Datei - Auszug"
+
 msgctxt "model:ir.action,name:act_account_form"
 msgid "Released Accounts"
 msgstr "Freigegebene Konten"
@@ -309,6 +509,14 @@ msgstr "EBICS-Zugänge"
 msgctxt "model:ir.action,name:act_format_form"
 msgid "Formats"
 msgstr "Formate"
+
+msgctxt "model:ir.action,name:act_log_file_form"
+msgid "Received Files"
+msgstr "Empfangene Dateien"
+
+msgctxt "model:ir.action,name:act_log_form"
+msgid "Logs"
+msgstr "Protokoll"
 
 msgctxt "model:ir.message,text:msg_account_bank_account_unique"
 msgid "A bank account can be released only once per EBICS connection."
@@ -325,6 +533,12 @@ msgstr ""
 msgctxt "model:ir.message,text:msg_account_iban_required"
 msgid "The bank account \"%(bank_account)s\" has no IBAN."
 msgstr "Das Bankkonto „%(bank_account)s“ hat keine IBAN."
+
+msgctxt "model:ir.message,text:msg_account_validity"
+msgid "The start of validity of account \"%(account)s\" must not be after its end."
+msgstr ""
+"Der Beginn der Gültigkeit des Kontos „%(account)s“ darf nicht nach ihrem Ende"
+" liegen."
 
 msgctxt "model:ir.message,text:msg_configuration_format_unique"
 msgid "A format can be added only once to an EBICS connection."
@@ -376,11 +590,40 @@ msgstr ""
 "Ein Format mit der BTF-Angabe „%(btf)s“ existiert bereits (Format "
 "„%(format)s“)."
 
+msgctxt "model:ir.message,text:msg_log_copy"
+msgid "Records of \"%(model)s\" cannot be copied."
+msgstr "Datensätze von „%(model)s“ können nicht kopiert werden."
+
+msgctxt "model:ir.message,text:msg_log_create"
+msgid "Records of \"%(model)s\" are created only by the EBICS orders."
+msgstr ""
+"Datensätze von „%(model)s“ werden nur von den EBICS-Aufträgen angelegt."
+
+msgctxt "model:ir.message,text:msg_log_delete"
+msgid "Records of \"%(model)s\" cannot be deleted."
+msgstr "Datensätze von „%(model)s“ können nicht gelöscht werden."
+
+msgctxt "model:ir.message,text:msg_log_write"
+msgid "Records of \"%(model)s\" cannot be changed."
+msgstr "Datensätze von „%(model)s“ können nicht geändert werden."
+
+msgctxt "model:ir.message,text:msg_log_write_fields"
+msgid "The fields \"%(fields)s\" of \"%(model)s\" cannot be changed."
+msgstr "Die Felder „%(fields)s“ von „%(model)s“ können nicht geändert werden."
+
 msgctxt "model:ir.rule.group,name:rule_group_account_companies"
 msgid "User in companies"
 msgstr "Benutzer in Unternehmen"
 
 msgctxt "model:ir.rule.group,name:rule_group_configuration_companies"
+msgid "User in companies"
+msgstr "Benutzer in Unternehmen"
+
+msgctxt "model:ir.rule.group,name:rule_group_log_companies"
+msgid "User in companies"
+msgstr "Benutzer in Unternehmen"
+
+msgctxt "model:ir.rule.group,name:rule_group_log_file_companies"
 msgid "User in companies"
 msgstr "Benutzer in Unternehmen"
 
@@ -403,6 +646,14 @@ msgstr "EBICS"
 msgctxt "model:ir.ui.menu,name:menu_format_form"
 msgid "Formats"
 msgstr "Formate"
+
+msgctxt "model:ir.ui.menu,name:menu_log_file_form"
+msgid "Received Files"
+msgstr "Empfangene Dateien"
+
+msgctxt "model:ir.ui.menu,name:menu_log_form"
+msgid "Logs"
+msgstr "Protokoll"
 
 msgctxt "model:res.group,name:group_ebics"
 msgid "EBICS"
@@ -496,6 +747,54 @@ msgctxt "selection:account.ebics.format,processing:"
 msgid "Store Only"
 msgstr "Nur Ablage"
 
+msgctxt "selection:account.ebics.log,receipt:"
+msgid "Negative"
+msgstr "Negativ"
+
+msgctxt "selection:account.ebics.log,receipt:"
+msgid "None"
+msgstr "Keine"
+
+msgctxt "selection:account.ebics.log,receipt:"
+msgid "Positive"
+msgstr "Positiv"
+
+msgctxt "selection:account.ebics.log,state:"
+msgid "Done"
+msgstr "Erledigt"
+
+msgctxt "selection:account.ebics.log,state:"
+msgid "Error"
+msgstr "Fehler"
+
+msgctxt "selection:account.ebics.log,state:"
+msgid "No Data"
+msgstr "Keine Daten"
+
+msgctxt "selection:account.ebics.log.file,state:"
+msgid "Duplicate"
+msgstr "Dublette"
+
+msgctxt "selection:account.ebics.log.file,state:"
+msgid "Error"
+msgstr "Fehler"
+
+msgctxt "selection:account.ebics.log.file,state:"
+msgid "Imported"
+msgstr "Importiert"
+
+msgctxt "selection:account.ebics.log.file,state:"
+msgid "Pending"
+msgstr "Ausstehend"
+
+msgctxt "selection:account.ebics.log.file,state:"
+msgid "Stored"
+msgstr "Abgelegt"
+
+msgctxt "selection:account.ebics.log.file,state:"
+msgid "Unknown Account"
+msgstr "Unbekanntes Konto"
+
 msgctxt "view:account.ebics.configuration:"
 msgid "Access"
 msgstr "Zugang"
@@ -515,3 +814,23 @@ msgstr "Eigene Zertifikate"
 msgctxt "view:account.ebics.format:"
 msgid "BTF Parameters"
 msgstr "BTF-Angabe"
+
+msgctxt "view:account.ebics.log.file:"
+msgid "Date"
+msgstr "Datum"
+
+msgctxt "view:account.ebics.log.file:"
+msgid "Time"
+msgstr "Uhrzeit"
+
+msgctxt "view:account.ebics.log:"
+msgid "Date"
+msgstr "Datum"
+
+msgctxt "view:account.ebics.log:"
+msgid "Return"
+msgstr "Rückgabe"
+
+msgctxt "view:account.ebics.log:"
+msgid "Time"
+msgstr "Uhrzeit"

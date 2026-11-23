@@ -7,12 +7,14 @@ from trytond.model.exceptions import ValidationError
 from trytond.pyson import Eval
 from trytond.transaction import Transaction
 
+from ..core.history import HistoryMixin
+
 # Fields that identify a format (FO02); empty values count as equal.
 KEY_FIELDS = ['direction', 'service_name', 'scope', 'service_option',
     'msg_name', 'msg_version', 'container']
 
 
-class Format(DeactivableMixin, ModelSQL, ModelView):
+class Format(DeactivableMixin, HistoryMixin, ModelSQL, ModelView):
     __name__ = 'account.ebics.format'
     __string__ = "EBICS Format"
 
