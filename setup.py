@@ -47,6 +47,8 @@ for dep in info.get('depends', []):
         prefix = MODULE2PREFIX.get(dep, 'trytond')
         requires.append(get_require_version('%s_%s' % (prefix, dep)))
 requires.append(get_require_version('trytond'))
+# Protocol layer: keys, signatures, encryption (installed: 50.0.2)
+requires.append('cryptography >= 50.0')
 
 tests_require = []
 
@@ -73,7 +75,8 @@ setup(name=name,
         'trytond.modules.account_ebics': (info.get('xml', [])
             + ['tryton.cfg', 'view/*/*.xml', 'locale/*.po',
                 'report/*.fodt', 'report/*.odt', 'icons/*.svg',
-                'tests/*.rst', 'tests/*.xml', 'tests/*.json']),
+                'tests/*.rst', 'tests/*.xml', 'tests/*.json',
+                'tests/data/*']),
         },
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
