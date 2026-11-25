@@ -3,12 +3,15 @@
 # copyright notices and license terms.
 import datetime
 import hashlib
+from decimal import Decimal
 
 from trytond.exceptions import UserError
 from trytond.model.exceptions import AccessError
 from trytond.modules.account.tests import create_chart
+from trytond.modules.account_ebics.tests import camt_generator
 from trytond.modules.company.tests import (
     CompanyTestMixin, create_company, set_company)
+from trytond.modules.currency.tests import add_currency_rate, create_currency
 from trytond.pool import Pool
 from trytond.tests.test_tryton import ModuleTestCase, with_transaction
 from trytond.transaction import Transaction
@@ -1073,6 +1076,75 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
         self.assertRejected(
             'delete used account', create(use=True, delete=True),
             'used by field "Account" of "EBICS Received File"')
+
+    # E12 T5
+    @with_transaction()
+    def test_camt_generator_import(self):
+        "A generated camt.053 is imported by account_statement_sepa"
+        pool = Pool()
+        StatementJournal = pool.get('account.statement.journal')
+        AccountJournal = pool.get('account.journal')
+        AccountAccount = pool.get('account.account')
+        Statement = pool.get('account.statement')
+        ImportStatement = pool.get('account.statement.import', type='wizard')
+        # ISO code: the camt account currency selects the journal
+        currency = create_currency('EUR')
+        add_currency_rate(currency, 1)
+        company = create_company(currency=currency)
+        with set_company(company):
+            create_chart(company)
+            bank_account = create_bank_account(company)
+            cash, = AccountAccount.search([
+                    ('type', '!=', None),
+                    ('closed', '!=', True),
+                    ('company', '=', company.id),
+                    ('party_required', '=', False),
+                    ], limit=1)
+            account_journal, = AccountJournal.search(
+                [('code', '=', 'STA')], limit=1)
+            journal, = StatementJournal.create([{
+                        'name': "Test statement journal",
+                        'journal': account_journal.id,
+                        'account': cash.id,
+                        'currency': company.currency.id,
+                        'company': company.id,
+                        'bank_account': bank_account.id,
+                        'validation': 'balance',
+                        }])
+            date = datetime.date(2026, 11, 24)
+            name, data = camt_generator.make_camt053(
+                TEST_IBAN, date, entries=6, currency='EUR',
+                start_balance=Decimal('1000.00'), seed=5)
+            self.assertEqual(camt_generator.check_camt053(data), [])
+
+            session_id, _, _ = ImportStatement.create()
+            wizard = ImportStatement(session_id)
+            wizard.start.company = company
+            wizard.start.file_ = data
+            wizard.start.file_format = 'camt_053_001'
+            wizard.do_import_({'views': []})
+
+            statement, = Statement.search([])
+            self.assertEqual(statement.journal, journal)
+            self.assertEqual(statement.date, date)
+            self.assertEqual(len(statement.origins), 6)
+            self.assertEqual(statement.number_of_lines, 6)
+            self.assertEqual(statement.start_balance, Decimal('1000.00'))
+            self.assertEqual(
+                statement.start_balance + sum(
+                    o.amount for o in statement.origins),
+                statement.end_balance)
+            self.assertEqual(statement.total_amount, sum(
+                    o.amount for o in statement.origins))
+            self.assertTrue(statement.name.startswith('TEST-STMT-20261124-'))
+            self.assertTrue(all(
+                    o.information.get('camt_remittance_information')
+                    for o in statement.origins))
+            self.assertTrue(all(
+                    camt_generator.iban_valid(
+                        o.information.get('camt_debtor_iban')
+                        or o.information.get('camt_creditor_iban'))
+                    for o in statement.origins))
 
     @with_transaction()
     def test_account_delete_unused(self):

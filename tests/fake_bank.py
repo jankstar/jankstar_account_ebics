@@ -5,13 +5,15 @@
 
 Independent of the transport: handle(request: bytes) -> response bytes. It
 checks the requests (schema if an XSD directory is given, authentication
-signature of HPB) and builds the responses for HEV, INI, HIA and HPB. The
+signatures) and builds the responses for HEV, INI, HIA, HPB and BTD. The
 bank keys and certificates are generated (test data only). The same core
-can serve as local HTTPS test server later (block E12).
+serves the local HTTPS test server tools/ebics_testserver.py (block E12):
+its state is plain data (to_state()/from_state()), without files.
 
 No Tryton imports; only the protocol layer of the module.
 """
 import base64
+import datetime
 import hashlib
 import io
 import os
@@ -34,6 +36,29 @@ PARTIALLY_INI = 'partially_initialised_ini'
 PARTIALLY_HIA = 'partially_initialised_hia'
 INITIALISED = 'initialised'
 READY = 'ready'
+#: Locked by the bank (working paper E12 ch. 4.5): HPB and BTD -> 091004
+SUSPENDED = 'suspended'
+STATES = (NEW, PARTIALLY_INI, PARTIALLY_HIA, INITIALISED, READY, SUSPENDED)
+#: Version of the data of to_state()
+STATE_VERSION = 1
+#: Parts of the BTF parameters (specification account_ebics ch. 5.5, D15)
+BTF_PARTS = ('service_name', 'scope', 'service_option', 'msg_name',
+    'msg_version', 'container')
+#: Error cases of the attribute faults: name -> type of the value
+FAULTS = {
+    'HPB': str,
+    'HPB_wrong_key': bool,
+    'HPB_garbage': bool,
+    'BTD': str,
+    'BTD_tamper': bool,
+    'BTD_endless': bool,
+    'BTD_num_segments': int,
+    'BTD_fewer': bool,
+    'BTD_wrong_key': bool,
+    'short_transaction_key': bool,
+    'full_transaction_key': bool,
+    }
+_PHASES = ('Initialisation', 'Transfer', 'Receipt')
 
 BANK_SUBJECT = keys.Subject('TESTBANK', 'Testbank (Testdaten)', 'DE')
 
@@ -62,12 +87,19 @@ class FakeBank:
     {'BTD_wrong_key': True} (order data for another key),
     {'short_transaction_key': True} (TransactionKey shorter than the modulus,
     i.e. with a leading zero byte that is not transmitted, ch. 11.3.2.2),
-    {'full_transaction_key': True} (TransactionKey padded to the modulus).
-    downloads: {msg_name: [(file name, data)]} for BTD; files are delivered
-    until a positive receipt; segment_size splits the base64 order data
-    (EBICS specification ch. 7: at most 1 MB).
+    {'full_transaction_key': True} (TransactionKey padded to the modulus),
+    {'BTD': '091008'} (technical code of the BTD initialisation).
+    files: downloads for BTD with BTF parameters and date (add_download(),
+    selection by all BTF parts and DateRange, see select_downloads());
+    downloads: short form {msg_name: [(file name, data)]} for the tests,
+    selected only by the message name; both are delivered until a positive
+    receipt; segment_size splits the base64 order data (EBICS specification
+    ch. 7: at most 1 MB).
     received: list of (order type, details) of the processed requests;
-    receipts: list of (transaction ID, receipt code)."""
+    receipts: list of (transaction ID, receipt code).
+    A request that cannot be read or is unknown gets the technical code
+    061002 EBICS_INVALID_REQUEST instead of an exception (working paper
+    E12 ch. 4.4)."""
 
     def __init__(self, host_id='TESTHOST', bits=2048, xsd_dir=None,
             auto_release=True, keyring=None):
@@ -81,6 +113,7 @@ class FakeBank:
         self.schema_errors = []
         self._order_number = 0
         self.downloads = {}
+        self.files = []
         self.segment_size = 1048576
         self.transactions = {}
         self.receipts = []
@@ -92,8 +125,63 @@ class FakeBank:
             (partner_id, user_id), Participant())
 
     def release(self, partner_id, user_id):
-        "The bank has checked the initialisation letters"
-        self.participant(partner_id, user_id).state = READY
+        """The bank has checked the initialisation letters (also: unlock a
+        suspended participant); INI and HIA must be done"""
+        participant = self.participant(partner_id, user_id)
+        if not {'A006', 'X002', 'E002'} <= set(participant.certificates):
+            raise ValueError("INI and HIA are missing")
+        participant.state = READY
+
+    def suspend(self, partner_id, user_id):
+        "Lock a known participant (HPB and BTD -> 091004)"
+        participant = self.participants.get((partner_id, user_id))
+        if participant is None:
+            raise ValueError("Unknown participant")
+        participant.state = SUSPENDED
+
+    def add_download(self, btf, name, data, date=None, file_id=None):
+        """Provide a file for BTD with the BTF parameters (protocol.client.Btf
+        or dict of BTF_PARTS) and its date (datetime.date, default today);
+        return the entry {id, btf, name, data, date, delivered}"""
+        if not name or '/' in name or '\\' in name or name.startswith('.'):
+            raise ValueError("Invalid file name")
+        entry = {
+            'id': file_id or os.urandom(8).hex(),
+            'btf': btf_dict(btf),
+            'name': name,
+            'data': bytes(data),
+            'date': (date or datetime.date.today()).isoformat(),
+            'delivered': False,
+            }
+        if any(e['id'] == entry['id'] for e in self.files):
+            raise ValueError("Duplicate file ID")
+        self.files.append(entry)
+        return entry
+
+    def select_downloads(self, btf, date_range=None):
+        """Return the file entries for a BTD request: all BTF parts must be
+        equal (a missing part only matches a missing part), except the
+        message version, which only excludes if given on both sides;
+        without date_range the files not yet delivered, with date_range
+        (start, end; dates, inclusive) all files with a date in the range,
+        also delivered ones (working paper E12 ch. 4.4, decision F9;
+        specification account_ebics ch. 7.2)"""
+        wanted = btf_dict(btf)
+        if date_range is not None:
+            start, end = (
+                d.isoformat() if isinstance(d, datetime.date) else d
+                for d in date_range)
+        result = []
+        for entry in self.files:
+            if not btf_match(entry['btf'], wanted):
+                continue
+            if date_range is None:
+                if entry['delivered']:
+                    continue
+            elif not start <= entry['date'] <= end:
+                continue
+            result.append(entry)
+        return sorted(result, key=lambda e: e['date'])
 
     def certificate(self, purpose):
         return self.keyring.certificate(purpose)
@@ -107,20 +195,28 @@ class FakeBank:
     # entry point
 
     def handle(self, request):
-        """Process the request bytes and return the response bytes"""
-        root = ebics_xml.parse(request)
-        local = ebics_xml.etree.QName(root).localname
-        if local == 'ebicsRequest':
-            return self.handle_request(root)
-        if local == 'ebicsHEVRequest':
-            self._validate(root, 'hev')
-            return self._hev(root)
-        self._validate(root, 'keymgmt_request')
-        if local == 'ebicsUnsecuredRequest':
-            return self._unsecured(root)
-        if local == 'ebicsNoPubKeyDigestsRequest':
-            return self._hpb(root)
-        return self._key_management_response('061002', '000000')
+        """Process the request bytes and return the response bytes; a
+        request that cannot be read or is unknown gets 061002"""
+        try:
+            root = ebics_xml.parse(request)
+        except EbicsError:
+            return self._invalid(None)
+        try:
+            if root.tag == ebics_xml.qname('ebicsRequest'):
+                return self.handle_request(root)
+            if root.tag == ebics_xml.qname('ebicsHEVRequest', NS_HEV):
+                self._validate(root, 'hev')
+                return self._hev(root)
+            if root.tag == ebics_xml.qname('ebicsUnsecuredRequest'):
+                self._validate(root, 'keymgmt_request')
+                return self._unsecured(root)
+            if root.tag == ebics_xml.qname('ebicsNoPubKeyDigestsRequest'):
+                self._validate(root, 'keymgmt_request')
+                return self._hpb(root)
+        except (EbicsError, ValueError):
+            # missing elements, invalid values (defensive reading)
+            return self._invalid(root)
+        return self._invalid(root)
 
     def handle_request(self, root):
         "ebicsRequest (BTD) after the schema check"
@@ -135,6 +231,26 @@ class FakeBank:
             if errors:
                 self.schema_errors.append((kind, errors))
 
+    def _invalid(self, root):
+        """061002 EBICS_INVALID_REQUEST in the kind of response that fits
+        the request (EBICS specification V 3.0.2 (DE) annex 1: message not
+        EBICS conform)"""
+        code = '061002'
+        tag = root.tag if root is not None else None
+        self.received.append(('INVALID', {
+                    'root': ebics_xml.etree.QName(root).localname
+                    if root is not None else None}))
+        if tag == ebics_xml.qname('ebicsRequest'):
+            phase = ebics_xml.get_text(
+                root, 'ebics:header/ebics:mutable/ebics:TransactionPhase',
+                required=False)
+            if phase not in _PHASES:
+                phase = 'Initialisation'
+            return self._response(phase, code, '000000')
+        if tag == ebics_xml.qname('ebicsHEVRequest', NS_HEV):
+            return self._hev_response(code)
+        return self._key_management_response(code, '000000')
+
     def _next_order_id(self):
         self._order_number += 1
         return 'A%03d' % self._order_number
@@ -143,6 +259,9 @@ class FakeBank:
         host_id = ebics_xml.get_text(root, 'hev:HostID')
         code = '000000' if host_id == self.host_id else '091011'
         self.received.append(('HEV', {'host_id': host_id}))
+        return self._hev_response(code)
+
+    def _hev_response(self, code):
         response = ebics_xml.element(
             'ebicsHEVResponse', namespace=NS_HEV, nsmap={None: NS_HEV})
         system = ebics_xml.sub_element(
@@ -282,6 +401,8 @@ class FakeBank:
         except EbicsAuthenticationError:
             return self._key_management_response('061001', '000000')
         self.received.append(('HPB', {'static': static}))
+        if participant.state == SUSPENDED:
+            return self._key_management_response('091004', '000000')
         if self.faults.get('HPB'):
             return self._key_management_response(
                 self.faults['HPB'], '000000')
@@ -409,6 +530,8 @@ class FakeBank:
                 root, participant.certificates['X002'].public_key())
         except EbicsAuthenticationError:
             return self._response(phase, '061001', '000000')
+        if participant.state == SUSPENDED:
+            return self._response(phase, '091004', '000000', transaction_id)
         if phase == 'Transfer':
             number = int(ebics_xml.get_text(
                     root, 'ebics:header/ebics:mutable/ebics:SegmentNumber'))
@@ -439,7 +562,12 @@ class FakeBank:
             transaction['closed'] = True
             if code == 0:
                 # delivered: the data are no longer offered without range
-                self.downloads.pop(transaction['msg_name'], None)
+                if transaction.get('legacy', True):
+                    self.downloads.pop(transaction['msg_name'], None)
+                ids = set(transaction.get('file_ids', []))
+                for entry in self.files:
+                    if entry['id'] in ids:
+                        entry['delivered'] = True
             return self._response(
                 phase, '011000' if code == 0 else '011001', '000000',
                 transaction_id)
@@ -450,13 +578,18 @@ class FakeBank:
         participant = self.participants.get(
             (static['partner_id'], static['user_id']))
         if (static['host_id'] != self.host_id or participant is None
-                or participant.state != READY):
+                or participant.state not in {READY, SUSPENDED}):
             return self._response('Initialisation', '091002', '000000')
         try:
             ebics_xml.verify_auth(
                 root, participant.certificates['X002'].public_key())
         except EbicsAuthenticationError:
             return self._response('Initialisation', '061001', '000000')
+        if participant.state == SUSPENDED:
+            return self._response('Initialisation', '091004', '000000')
+        if self.faults.get('BTD'):
+            return self._response(
+                'Initialisation', self.faults['BTD'], '000000')
         header = ebics_xml.find(root, 'ebics:header/ebics:static')
         for name, purpose in [('Authentication', 'X002'),
                 ('Encryption', 'E002')]:
@@ -473,16 +606,20 @@ class FakeBank:
         date_range = None
         if ebics_xml.find(params, 'ebics:DateRange', required=False) \
                 is not None:
-            date_range = (
-                ebics_xml.get_text(params, 'ebics:DateRange/ebics:Start'),
-                ebics_xml.get_text(params, 'ebics:DateRange/ebics:End'))
+            date_range = tuple(
+                datetime.date.fromisoformat(ebics_xml.get_text(
+                        params, 'ebics:DateRange/ebics:' + n)).isoformat()
+                for n in ['Start', 'End'])
+        requested = service_btf(service)
         self.received.append(('BTD', {
                     'phase': 'Initialisation', 'static': static,
                     'service': {
                         etree_local(n): (n.text, dict(n.attrib))
                         for n in service},
                     'date_range': date_range}))
-        files = self.downloads.get(msg_name)
+        legacy = list(self.downloads.get(msg_name) or [])
+        entries = self.select_downloads(requested, date_range)
+        files = legacy + [(e['name'], e['data']) for e in entries]
         if not files:
             return self._response('Initialisation', '000000', '090005')
 
@@ -499,7 +636,9 @@ class FakeBank:
         transaction_id = os.urandom(16).hex().upper()
         self.transactions[transaction_id] = {
             'segments': segments, 'closed': False, 'msg_name': msg_name,
-            'participant': (static['partner_id'], static['user_id'])}
+            'participant': (static['partner_id'], static['user_id']),
+            'btf': requested, 'date_range': date_range,
+            'legacy': bool(legacy), 'file_ids': [e['id'] for e in entries]}
         announced = self.faults.get('BTD_num_segments', len(segments))
         last = len(segments) == 1
         if self.faults.get('BTD_fewer'):
@@ -527,9 +666,160 @@ class FakeBank:
             'Initialisation', '000000', '000000', transaction_id,
             num_segments=announced, segment=1, last=last, transfer=transfer)
 
+    # state as plain data (working paper E12 ch. 4.3, ch. 6)
+
+    def to_state(self):
+        """Return the state as JSON-compatible data: participants with
+        certificates (DER, base64), downloads with data (base64), open and
+        closed transactions, receipts, faults; no private keys (the bank
+        keyring is kept separately), only the hash values of the bank
+        certificates for the check in from_state()"""
+        def b64(data):
+            return base64.b64encode(data).decode('ascii')
+        return {
+            'version': STATE_VERSION,
+            'host_id': self.host_id,
+            'auto_release': self.auto_release,
+            'bank_keys': {p: self.bank_hash(p) for p in ('X002', 'E002')},
+            'order_number': self._order_number,
+            'segment_size': self.segment_size,
+            'participants': [{
+                    'partner_id': partner_id,
+                    'user_id': user_id,
+                    'state': participant.state,
+                    'security_medium': participant.security_medium,
+                    'certificates': {
+                        purpose: b64(certificate.public_bytes(
+                                serialization.Encoding.DER))
+                        for purpose, certificate in sorted(
+                            participant.certificates.items())},
+                    } for (partner_id, user_id), participant in sorted(
+                    self.participants.items())],
+            'downloads': {
+                msg_name: [[name, b64(data)] for name, data in files]
+                for msg_name, files in sorted(self.downloads.items())},
+            'files': [dict(entry, btf=dict(entry['btf']),
+                    data=b64(entry['data'])) for entry in self.files],
+            'transactions': {
+                transaction_id: dict(transaction,
+                    segments=list(transaction['segments']),
+                    participant=list(transaction['participant']),
+                    btf=dict(transaction.get('btf') or {}) or None,
+                    date_range=list(transaction['date_range'])
+                    if transaction.get('date_range') else None,
+                    file_ids=list(transaction.get('file_ids', [])))
+                for transaction_id, transaction in sorted(
+                    self.transactions.items())},
+            'receipts': [list(r) for r in self.receipts],
+            'faults': dict(self.faults),
+            }
+
+    @classmethod
+    def from_state(cls, state, keyring, xsd_dir=None, auto_release=None):
+        """Return a bank with the state of to_state() and the bank keyring
+        (the hash values of its X002/E002 certificates must match the
+        state); auto_release overrides the stored value if given"""
+        if state.get('version') != STATE_VERSION:
+            raise ValueError("Unknown version of the state")
+        bank = cls(
+            host_id=state['host_id'], xsd_dir=xsd_dir, keyring=keyring,
+            auto_release=(state.get('auto_release', False)
+                if auto_release is None else auto_release))
+        for purpose, value in (state.get('bank_keys') or {}).items():
+            if bank.bank_hash(purpose) != value:
+                raise ValueError(
+                    "The bank keyring does not match the state")
+        bank._order_number = int(state.get('order_number', 0))
+        bank.segment_size = int(state.get('segment_size', 1048576))
+        for values in state.get('participants', []):
+            state_ = values['state']
+            if state_ not in STATES:
+                raise ValueError("Unknown participant state")
+            bank.participants[(values['partner_id'], values['user_id'])] = (
+                Participant(
+                    state=state_,
+                    certificates={
+                        purpose: x509.load_der_x509_certificate(
+                            base64.b64decode(der))
+                        for purpose, der in values['certificates'].items()},
+                    security_medium=values.get('security_medium')))
+        bank.downloads = {
+            msg_name: [(name, base64.b64decode(data))
+                for name, data in files]
+            for msg_name, files in state.get('downloads', {}).items()}
+        bank.files = [dict(entry, btf=btf_dict(entry['btf']),
+                data=base64.b64decode(entry['data']),
+                delivered=bool(entry.get('delivered')))
+            for entry in state.get('files', [])]
+        bank.transactions = {
+            transaction_id: dict(transaction,
+                segments=list(transaction['segments']),
+                participant=tuple(transaction['participant']),
+                date_range=tuple(transaction['date_range'])
+                if transaction.get('date_range') else None,
+                file_ids=list(transaction.get('file_ids', [])))
+            for transaction_id, transaction in state.get(
+                'transactions', {}).items()}
+        bank.receipts = [tuple(r) for r in state.get('receipts', [])]
+        bank.faults = dict(state.get('faults', {}))
+        return bank
+
 
 def etree_local(node):
     return ebics_xml.etree.QName(node).localname
+
+
+def btf_dict(btf):
+    """BTF parameters as dict of BTF_PARTS (empty parts None) from a
+    protocol.client.Btf or a dict"""
+    if not isinstance(btf, dict):
+        btf = {part: getattr(btf, part) for part in BTF_PARTS}
+    result = {}
+    for part in BTF_PARTS:
+        value = btf.get(part)
+        value = value.strip() if isinstance(value, str) else value
+        result[part] = value or None
+    if not result['service_name'] or not result['msg_name']:
+        raise ValueError("Service name and message name are required")
+    return result
+
+
+def btf_match(offered, wanted):
+    """True if the BTF parameters of a provided file fit the request:
+    equal parts, the message version only differs if given on both
+    sides"""
+    for part in BTF_PARTS:
+        a, b = offered.get(part), wanted.get(part)
+        if part == 'msg_version' and (a is None or b is None):
+            continue
+        if a != b:
+            return False
+    return True
+
+
+def service_btf(service):
+    """BTF parameters of the element Service of BTDOrderParams
+    (ebics_orders_H005.xsd RestrictedServiceType)"""
+    def text(name):
+        return ebics_xml.get_text(service, 'ebics:' + name, required=False)
+    container = ebics_xml.get_attribute(
+        service, 'ebics:Container', 'containerType', required=False)
+    return btf_dict({
+            'service_name': text('ServiceName'),
+            'scope': text('Scope'),
+            'service_option': text('ServiceOption'),
+            'msg_name': text('MsgName'),
+            'msg_version': ebics_xml.get_attribute(
+                service, 'ebics:MsgName', 'version', required=False),
+            'container': container,
+            })
+
+
+def btf_text(btf):
+    """BTF parameters as text in the order of D15, e.g.
+    EOP/DE/camt.053/ZIP (specification account_ebics ch. 5.5)"""
+    btf = btf_dict(btf)
+    return '/'.join(btf[p] for p in BTF_PARTS if btf[p])
 
 
 class FakeBankTransport:

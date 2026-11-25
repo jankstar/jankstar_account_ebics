@@ -72,7 +72,8 @@ setup(name=name,
     packages=(
         ['trytond.modules.account_ebics']
         + ['trytond.modules.account_ebics.%s' % p
-            for p in find_packages()]
+            # tools/ (local test server) is not part of the package (E12 F1)
+            for p in find_packages(exclude=['tools', 'tools.*'])]
         ),
     package_data={
         'trytond.modules.account_ebics': (info.get('xml', [])
