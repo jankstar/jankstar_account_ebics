@@ -18,3 +18,17 @@ class EbicsCryptoError(EbicsError):
 
 class EbicsKeyringError(EbicsError):
     "The key container cannot be created or read"
+
+
+class EbicsProtocolError(EbicsError):
+    """A message is not well-formed, too big, invalid according to the
+    schema or misses an expected element"""
+
+
+class EbicsAuthenticationError(EbicsError):
+    "The authentication signature (X002) of a message is not valid"
+
+
+class EbicsTransportError(EbicsError):
+    """The HTTPS request failed (network, TLS, timeout, HTTP status, size);
+    the message contains no order data"""

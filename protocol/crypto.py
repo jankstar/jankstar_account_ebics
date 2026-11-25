@@ -114,10 +114,12 @@ def encrypt_e002(data, recipient_public_key, transaction_key=None):
     A random 128-bit transaction key encrypts the data with AES-128 in CBC
     mode, ICV = 0, padding ANSI X9.23 / ISO 10126-2 (here ISO 10126-2);
     the transaction key is encrypted with RSA and PKCS #1 padding with the
-    public key of the recipient (2048 to 16384 bits).
+    public key of the recipient (2048 to 16384 bits) and returned without
+    padding to the length of the modulus (leading zero bytes removed).
     transaction_key is only for tests with fixed values.
 
-    Source: EBICS specification V 3.0.2 (DE) ch. 11.3.2.1; ch. 3.2."""
+    Source: EBICS specification V 3.0.2 (DE) ch. 11.3.2.1, ch. 11.3.2.2
+    (TransactionKey not padded); ch. 3.2."""
     _check_e002_key(recipient_public_key)
     if transaction_key is None:
         transaction_key = os.urandom(_BLOCK)
@@ -128,25 +130,35 @@ def encrypt_e002(data, recipient_public_key, transaction_key=None):
     ciphertext = encryptor.update(_pad(bytes(data))) + encryptor.finalize()
     encrypted_key = recipient_public_key.encrypt(
         transaction_key, padding.PKCS1v15())
+    # ch. 11.3.2.2: no padding to the full length of the modulus
+    encrypted_key = encrypted_key.lstrip(b'\x00') or b'\x00'
     return encrypted_key, ciphertext
 
 
 def decrypt_e002(encrypted_key, ciphertext, private_key):
     """Decrypt E002 data and return the (still compressed) order data.
 
-    PDEK is the RSA decryption of the encrypted transaction key with
+    The encrypted transaction key may be shorter than the modulus (it is
+    not padded, ch. 11.3.2.2) and is padded with leading zero bytes before
+    the decryption; longer is an error. PDEK is the RSA decryption with
     PKCS #1 padding; the 128 least significant bits (the last 16 bytes)
     form the key DEK for AES-128-CBC with ICV = 0; the padding (ANSI X9.23
     or ISO 10126-2) is removed.
 
-    Source: EBICS specification V 3.0.2 (DE) ch. 11.3.2.1."""
+    Source: EBICS specification V 3.0.2 (DE) ch. 11.3.2.1, ch. 11.3.2.2."""
     _check_e002_key(private_key)
     ciphertext = bytes(ciphertext)
     if not ciphertext or len(ciphertext) % _BLOCK:
         raise EbicsCryptoError(
             "The E002 data must be a multiple of %s bytes" % _BLOCK)
+    encrypted_key = bytes(encrypted_key)
+    length = (private_key.key_size + 7) // 8
+    if not encrypted_key or len(encrypted_key) > length:
+        raise EbicsCryptoError(
+            "The encrypted transaction key has an invalid length")
+    encrypted_key = encrypted_key.rjust(length, b'\x00')
     try:
-        pdek = private_key.decrypt(bytes(encrypted_key), padding.PKCS1v15())
+        pdek = private_key.decrypt(encrypted_key, padding.PKCS1v15())
     except ValueError:
         raise EbicsCryptoError(
             "The transaction key cannot be decrypted") from None

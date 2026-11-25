@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented test data: no real account, bank or booking -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>TEST-MSG-0001</MsgId>
+      <CreDtTm>2026-11-24T06:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>TEST-STMT-0001</Id>
+      <ElctrncSeqNb>1</ElctrncSeqNb>
+      <CreDtTm>2026-11-24T06:00:00</CreDtTm>
+      <Acct>
+        <Id><IBAN>DE14123456780000004711</IBAN></Id>
+        <Ccy>EUR</Ccy>
+        <Svcr><FinInstnId><Nm>Testbank (Testdaten)</Nm></FinInstnId></Svcr>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>PRCD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">1000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-11-23</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">1100.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-11-24</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="EUR">100.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-11-24</Dt></BookgDt>
+        <ValDt><Dt>2026-11-24</Dt></ValDt>
+        <BkTxCd><Prtry><Cd>NTRF+166</Cd><Issr>DK</Issr></Prtry></BkTxCd>
+        <NtryDtls><TxDtls>
+          <RmtInf><Ustrd>Testbuchung (erfunden)</Ustrd></RmtInf>
+        </TxDtls></NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

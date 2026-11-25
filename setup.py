@@ -49,6 +49,9 @@ for dep in info.get('depends', []):
 requires.append(get_require_version('trytond'))
 # Protocol layer: keys, signatures, encryption (installed: 50.0.2)
 requires.append('cryptography >= 50.0')
+# XML (installed: 6.1.3) and HTTPS transport (installed: 2.34.2)
+requires.append('lxml >= 6.0')
+requires.append('requests >= 2.0')
 
 tests_require = []
 
