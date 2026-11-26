@@ -3,8 +3,12 @@
 # copyright notices and license terms.
 import datetime
 import hashlib
+import math
+import warnings
 from decimal import Decimal
+from unittest.mock import patch
 
+from trytond import backend
 from trytond.exceptions import UserError
 from trytond.model.exceptions import AccessError
 from trytond.modules.account.tests import create_chart
@@ -13,7 +17,7 @@ from trytond.modules.company.tests import (
     CompanyTestMixin, create_company, set_company)
 from trytond.modules.currency.tests import add_currency_rate, create_currency
 from trytond.pool import Pool
-from trytond.tests.test_tryton import ModuleTestCase, with_transaction
+from trytond.tests.test_tryton import DB_NAME, ModuleTestCase, with_transaction
 from trytond.transaction import Transaction
 
 # Test data only: invented bank, invented IBAN with valid check digits
@@ -967,6 +971,92 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
                 [('configuration', '=', configuration.id)])
             self.assertTrue(
                 Relation.history_revisions([r.id for r in relations]))
+
+    # E14 T1
+    @with_transaction()
+    def test_history_fill_missing(self):
+        "Records without history get exactly one first revision, sliced"
+        pool = Pool()
+        Format = pool.get('account.ebics.format')
+        cursor = Transaction().connection.cursor()
+        history = Format.__table_history__()
+        count = 250
+        formats = Format.create([
+                format_values(name="Format %s" % i, msg_version='%03d' % i)
+                for i in range(count)])
+        ids = [f.id for f in formats]
+        self.assertGreater(count, min(backend.MAX_QUERY_PARAMS, 200))
+        # records without history as before E05
+        cursor.execute(*history.delete(where=history.id.in_(ids)))
+
+        def revisions():
+            cursor.execute(*history.select(
+                    history.id, history.msg_version,
+                    where=history.id.in_(ids)))
+            return sorted(cursor)
+        self.assertEqual(revisions(), [])
+
+        insert = Format._insert_history
+        with patch.object(Format, '_insert_history',
+                side_effect=insert) as mock:
+            Format._fill_missing_history()
+        self.assertEqual(revisions(), sorted(
+                (f.id, f.msg_version) for f in formats))
+        # slices of MAX_QUERY_PARAMS as in the Tryton standard
+        sizes = [len(c.args[0]) for c in mock.call_args_list]
+        self.assertEqual(sum(sizes), count)
+        self.assertEqual(
+            len(sizes), math.ceil(count / backend.MAX_QUERY_PARAMS))
+        self.assertLessEqual(max(sizes), backend.MAX_QUERY_PARAMS)
+        self.assertEqual(
+            [len(Format.history_revisions([i])) for i in ids], [1] * count)
+
+        # a second run changes nothing
+        with patch.object(Format, '_insert_history',
+                side_effect=insert) as mock:
+            Format._fill_missing_history()
+        self.assertEqual(mock.call_args_list, [])
+        self.assertEqual(len(revisions()), count)
+
+    # E14 T2
+    def test_upgrade_no_grouped_slice_warning(self):
+        "Upgrading the module raises no warning grouped_slice without size"
+        with Transaction().start(DB_NAME, 1, close=True) as transaction:
+            pool = Pool()
+            Module = pool.get('ir.module')
+            Format = pool.get('account.ebics.format')
+            ActivateUpgrade = pool.get(
+                'ir.module.activate_upgrade', type='wizard')
+            # some records without history, so that the migration works
+            with transaction.set_context(active_test=False):
+                ids = [f.id for f in Format.search([])]
+            self.assertTrue(ids)
+            history = Format.__table_history__()
+            transaction.connection.cursor().execute(
+                *history.delete(where=history.id.in_(ids)))
+            module, = Module.search([('name', '=', 'account_ebics')])
+            Module.upgrade([module])
+            transaction.commit()
+
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter('always')
+                instance_id, _, _ = ActivateUpgrade.create()
+                transaction.commit()
+                ActivateUpgrade(instance_id).transition_upgrade()
+                ActivateUpgrade.delete(instance_id)
+                transaction.commit()
+        messages = [str(w.message) for w in caught]
+        self.assertNotIn("grouped_slice without size is deprecated", messages)
+
+        with Transaction().start(DB_NAME, 1, close=True):
+            pool = Pool()
+            Module = pool.get('ir.module')
+            Format = pool.get('account.ebics.format')
+            module, = Module.search([('name', '=', 'account_ebics')])
+            self.assertEqual(module.state, 'activated')
+            # the upgrade filled the history again
+            self.assertTrue(all(
+                    len(Format.history_revisions([i])) == 1 for i in ids))
 
     @with_transaction()
     def test_history_key_fields_no_access(self):
