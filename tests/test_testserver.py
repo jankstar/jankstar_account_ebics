@@ -1,14 +1,17 @@
 # This file is part of the account_ebics module for Tryton.
 # The COPYRIGHT file at the top level of this repository contains the full
 # copyright notices and license terms.
-"""Tests of the local EBICS test server (block E12, working paper ch. 7).
+"""Tests of the local EBICS test server (block E12, working paper ch. 7)
+and of its web page (block E13, working paper ch. 7: AdminTestCase).
 
-T1-T5 without network; T6-T8 start the server in the test process on a
-random port at 127.0.0.1 with a temporary state directory (decision F11,
-the only exception from "no network": local only). Test data only.
+T1-T5 of E12 without network; T6-T8 of E12 and T1-T5 of E13 start the
+server in the test process on a random port at 127.0.0.1 with a temporary
+state directory (decision F11 of E12, the only exception from "no
+network": local only). Test data only.
 """
 import contextlib
 import datetime
+import http.client
 import importlib.util
 import io
 import json
@@ -16,6 +19,7 @@ import os
 import re
 import shutil
 import socket
+import ssl
 import tempfile
 import threading
 import unittest
@@ -36,6 +40,8 @@ from trytond.modules.account_ebics.tests.test_protocol import (
 
 HERE = os.path.dirname(__file__)
 TOOL = os.path.join(os.path.dirname(HERE), 'tools', 'ebics_testserver.py')
+ADMIN_PAGE = os.path.join(
+    os.path.dirname(HERE), 'tools', 'testserver_admin.html')
 CAMT053_XSD = os.environ.get('CAMT053_XSD')
 TEST_IBAN = 'DE14123456780000004711'
 STM_CAMT052 = client.Btf('STM', 'camt.052', scope='DE', container='ZIP')
@@ -536,7 +542,14 @@ class StateStoreTestCase(unittest.TestCase):
         # messages and one console line per request
         messages = os.listdir(os.path.join(
                 self.directory, testserver.MESSAGES))
-        self.assertEqual(len(messages), 2 * (4 + download.num_segments))
+        self.assertEqual(
+            len([m for m in messages if '-orderdata.' not in m]),
+            2 * (4 + download.num_segments))
+        # E13: plaintext of INI, HIA, HPB and the BTD initialisation
+        self.assertEqual(
+            sorted(m.rsplit('-', 2)[-2] + m[-4:] for m in messages
+                if '-orderdata.' in m),
+            ['BTD.zip', 'HIA.xml', 'HPB.xml', 'INI.xml'])
         self.assertTrue(any(re.search(r'-HPB-response\.xml$', m)
                 for m in messages))
         lines = self.out.getvalue().splitlines()
@@ -798,6 +811,476 @@ class HttpsTestCase(unittest.TestCase):
         self.assertTrue(args.state_dir.endswith(
                 os.path.join('python', 'ebics_testserver_state'))
             or os.environ.get('EBICS_TESTSERVER_STATE'))
+
+
+class AdminResponse:
+    def __init__(self, status, headers, body):
+        self.status = status
+        self.headers = headers
+        self.body = body
+
+    def json(self):
+        return json.loads(self.body)
+
+
+@unittest.skipUnless(testserver, SKIP_TOOL)
+class AdminTestCase(unittest.TestCase):
+    "Web page /admin of the test server (E13 T1-T6, working paper ch. 7)"
+
+    def setUp(self):
+        self.directory = tempfile.mkdtemp(prefix='ebics-ts-')
+        self.addCleanup(shutil.rmtree, self.directory)
+        with open(os.path.join(self.directory, testserver.KEYRING), 'wb') as f:
+            f.write(keys.dump_keyring(
+                    cached_bank_keyring(), testserver.PASSPHRASE))
+
+    def client(self, server, store, partner_id='TESTPARTNER',
+            user_id='TESTUSER'):
+        connection = client.Connection(
+            testserver.HOST_ID, partner_id, user_id,
+            testserver.url(server.server_address[1]))
+        return client.EbicsClient(
+            connection, cached_keyring(), HttpsTransport(
+                connection.url, ca_bundle=store.certificate_path,
+                timeout=20))
+
+    def request(self, server, path, method='GET', token=True, host=None,
+            body=None, content_type=None):
+        """Request with http.client: the path is sent unchanged (also
+        '../'), the Host header can be set"""
+        store = server.app.store
+        context = ssl.create_default_context(cafile=store.certificate_path)
+        connection = http.client.HTTPSConnection(
+            '127.0.0.1', server.server_address[1], context=context,
+            timeout=60)
+        headers = {}
+        if token is True:
+            token = server.admin.token
+        if token:
+            headers[testserver.TOKEN_HEADER] = token
+        if host is not None:
+            headers['Host'] = host
+        if content_type:
+            headers['Content-Type'] = content_type
+        try:
+            connection.request(method, path, body=body, headers=headers)
+            response = connection.getresponse()
+            return AdminResponse(
+                response.status, response.headers, response.read())
+        finally:
+            connection.close()
+
+    def api(self, server, path, **kwargs):
+        response = self.request(server, '/admin/api/' + path, **kwargs)
+        self.assertEqual(response.status, 200, response.body)
+        return response.json()
+
+    def command(self, server, *argv):
+        response = self.request(
+            server, '/admin/api/command', method='POST',
+            body=json.dumps({'argv': list(argv)}).encode('utf-8'),
+            content_type='application/json')
+        self.assertEqual(response.status, 200, response.body)
+        data = response.json()
+        return data['exit'], data['output']
+
+    def flow(self, server, store):
+        "HEV, INI, HIA, HPB 091002, release, HPB, camt.053, BTD, receipt"
+        ebics = self.client(server, store)
+        self.assertTrue(ebics.hev().ok)
+        self.assertTrue(ebics.ini().ok)
+        self.assertTrue(ebics.hia().ok)
+        self.assertEqual(ebics.hpb().technical.code, '091002')
+        self.assertEqual(
+            self.command(server, 'release', 'TESTPARTNER', 'TESTUSER')[0], 0)
+        result = ebics.hpb()
+        self.assertTrue(result.ok)
+        ebics.bank_keys = result.data['bank_keys']
+        self.assertEqual(self.command(
+                server, 'make-camt053', '--iban', TEST_IBAN, '--entries', '3',
+                '--date', '2026-11-24')[0], 0)
+        download = ebics.btd_download(CAMT053)
+        self.assertTrue(download.ok)
+        ebics.btd_receipt(download.transaction_id)
+        return ebics, download
+
+    # T1
+    def test_access(self):
+        "Token, Host header, security headers, --no-admin"
+        with running_server(self.directory) as (server, store, out):
+            port = server.server_address[1]
+            token = server.admin.token
+            self.assertGreaterEqual(len(token), 43)
+            self.assertEqual(
+                testserver.admin_url(port, token),
+                'https://127.0.0.1:%s/admin#token=%s' % (port, token))
+            for path in ['messages', 'status', 'messages/x']:
+                with self.subTest(path=path):
+                    for value in [None, 'wrong', token[:-1]]:
+                        self.assertEqual(self.request(
+                                server, '/admin/api/' + path,
+                                token=value).status, 403)
+            self.assertEqual(self.request(
+                    server, '/admin/api/command', method='POST', token=None,
+                    body=b'{"argv": ["status"]}',
+                    content_type='application/json').status, 403)
+            for host in ['ebics.example.invalid:%s' % port,
+                    '127.0.0.1:1', '127.0.0.1', 'localhost',
+                    '192.168.1.1:%s' % port, '']:
+                with self.subTest(host=host):
+                    self.assertEqual(self.request(
+                            server, '/admin/api/status', host=host).status,
+                        403)
+                    self.assertEqual(self.request(
+                            server, '/admin', host=host).status, 403)
+            self.assertEqual(self.request(
+                    server, '/admin/api/status',
+                    host='localhost:%s' % port).status, 200)
+            page = self.request(server, '/admin', token=None)
+            self.assertEqual(page.status, 200)
+            self.assertTrue(page.headers['Content-Type'].startswith(
+                    'text/html'))
+            with open(ADMIN_PAGE, 'rb') as f:
+                self.assertEqual(page.body, f.read())
+            for name, value in testserver.SECURITY_HEADERS.items():
+                with self.subTest(header=name):
+                    self.assertEqual(page.headers[name], value)
+            self.assertIn("default-src 'self'",
+                page.headers['Content-Security-Policy'])
+            self.assertEqual(page.headers['X-Frame-Options'], 'DENY')
+            self.assertEqual(page.headers['Cache-Control'], 'no-store')
+            self.assertEqual(
+                page.headers['X-Content-Type-Options'], 'nosniff')
+            forbidden = self.request(server, '/admin/api/status', token=None)
+            self.assertEqual(forbidden.headers['X-Frame-Options'], 'DENY')
+            self.assertEqual(self.request(
+                    server, '/admin/other').status, 404)
+            self.assertEqual(self.request(
+                    server, '/admin/api/unknown').status, 404)
+            # EBICS unchanged: GET /ebics -> 405
+            self.assertEqual(self.request(server, testserver.PATH).status,
+                405)
+            self.assertEqual(self.command(server, 'status')[0], 0)
+            self.assertNotIn(token, out.getvalue())
+        # the token is in no file of the state directory
+        for root, _, names in os.walk(self.directory):
+            for name in names:
+                with open(os.path.join(root, name), 'rb') as f:
+                    self.assertNotIn(token.encode('ascii'), f.read(), name)
+
+        with running_server(self.directory, admin=False) as (
+                server, store, out):
+            self.assertIsNone(server.admin)
+            for path in ['/admin', '/admin/api/status',
+                    '/admin/api/messages']:
+                with self.subTest(path=path):
+                    self.assertEqual(
+                        self.request(server, path, token='x').status, 404)
+            self.assertTrue(self.client(server, store).hev().ok)
+        self.assertTrue(testserver.parser().parse_args(
+                ['serve', '--no-admin']).no_admin)
+        self.assertFalse(testserver.parser().parse_args(['serve']).no_admin)
+
+    # T2, T3, T4
+    def test_messages(self):
+        "List, after, detail formatted and raw, order data, 404"
+        with running_server(self.directory) as (server, store, out):
+            self.assertEqual(self.api(server, 'messages'),
+                {'messages': [], 'total': 0, 'latest': None})
+            self.flow(server, store)
+
+            # T2 list
+            data = self.api(server, 'messages')
+            messages = data['messages']
+            ids = [m['id'] for m in messages]
+            self.assertEqual(ids, sorted(ids, reverse=True))
+            self.assertEqual(data['total'], len(messages))
+            self.assertEqual(data['latest'], ids[0])
+            self.assertEqual(
+                [(m['order_type'], m['phase']) for m in reversed(messages)],
+                [('HEV', None), ('INI', None), ('HIA', None), ('HPB', None),
+                    ('HPB', None), ('BTD', 'Initialisation'),
+                    ('BTD', 'Receipt')])
+            by_type = {}
+            for message in messages:
+                by_type.setdefault(message['order_type'], []).append(message)
+            ok, failed = by_type['HPB']
+            self.assertEqual(ok['technical']['code'], '000000')
+            self.assertEqual(failed['technical'], {
+                    'code': '091002',
+                    'symbol': 'EBICS_INVALID_USER_OR_USER_STATE',
+                    'klass': 'user_state'})
+            receipt, initialisation = by_type['BTD']
+            self.assertEqual(receipt['technical']['code'], '011000')
+            self.assertEqual(receipt['participant'], 'TESTPARTNER/TESTUSER')
+            self.assertEqual(initialisation['business']['symbol'],
+                'EBICS_OK')
+            self.assertIsNone(by_type['HEV'][0]['participant'])
+            self.assertEqual(
+                [m['order_data'] for m in reversed(messages)],
+                [None, 'xml', 'xml', None, 'xml', 'zip', None])
+            self.assertIsNone(failed['order_data'])
+            self.assertIsNone(receipt['order_data'])
+
+            # after: only newer messages
+            self.assertEqual(self.api(
+                    server, 'messages?after=' + ids[0])['messages'], [])
+            self.assertTrue(self.client(server, store).hev().ok)
+            newer = self.api(server, 'messages?after=' + ids[0])
+            self.assertEqual(
+                [m['order_type'] for m in newer['messages']], ['HEV'])
+            self.assertEqual(newer['total'], len(ids) + 1)
+            self.assertEqual(self.request(
+                    server, '/admin/api/messages?after=../x').status, 400)
+
+            # T3 detail formatted, raw, base64 shortened or full
+            message_id = initialisation['id']
+            detail = self.api(server, 'messages/' + message_id)
+            self.assertEqual(detail['order_type'], 'BTD')
+            path = os.path.join(store.path(testserver.MESSAGES), message_id)
+            for kind in ['request', 'response']:
+                with self.subTest(kind=kind):
+                    with open(path + '-%s.xml' % kind, 'rb') as f:
+                        original = f.read()
+                    self.assertIsNone(detail[kind]['error'])
+                    self.assertEqual(detail[kind]['size'], len(original))
+                    self.assertIn('\n  <', detail[kind]['text'])
+                    raw = self.api(
+                        server, 'messages/%s?raw=1' % message_id)[kind]
+                    self.assertEqual(raw['text'], original.decode('utf-8'))
+            response = detail['response']['text']
+            self.assertIn('Zeichen gekürzt', response)
+            full = self.api(server, 'messages/%s?full=1' % message_id)
+            self.assertNotIn('Zeichen gekürzt', full['response']['text'])
+            self.assertGreater(
+                len(full['response']['text']), len(response))
+            ebics_xml.parse(full['response']['text'])
+            for bad in ['20261126-000000-000000-HEV', 'unknown', '../bank',
+                    '..%2F..%2Fbank.json', ids[0] + '/../../bank.json',
+                    '%s-request' % ids[0], ids[0].replace('-', '/')]:
+                with self.subTest(id=bad):
+                    self.assertEqual(self.request(
+                            server, '/admin/api/messages/' + bad).status,
+                        404)
+            self.assertIsNone(server.admin.message('../' + ids[0]))
+
+            # T4 order data
+            def order_data(message):
+                return self.api(
+                    server, 'messages/' + message['id'])['order_data']
+            ini = order_data(by_type['INI'][0])
+            self.assertEqual(ini['kind'], 'xml')
+            self.assertIn('SignaturePubKeyInfo', ini['text'])
+            self.assertEqual(
+                [(c['purpose'], c['hash']) for c in ini['certificates']],
+                [('A006', keys.certificate_hash(
+                            cached_keyring().certificate('A006')))])
+            hia = order_data(by_type['HIA'][0])
+            self.assertEqual(
+                [(c['purpose'], c['hash']) for c in hia['certificates']],
+                [(p, keys.certificate_hash(cached_keyring().certificate(p)))
+                    for p in ['X002', 'E002']])
+            hpb = order_data(ok)
+            self.assertIn('HPBResponseOrderData', hpb['text'])
+            bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+            self.assertEqual(
+                [(c['purpose'], c['hash']) for c in hpb['certificates']],
+                [(p, bank.bank_hash(p)) for p in ['X002', 'E002']])
+            btd = order_data(initialisation)
+            self.assertEqual(btd['kind'], 'zip')
+            (entry,) = btd['files']
+            self.assertTrue(entry['name'].startswith('camt053_'))
+            self.assertIn('camt.053.001.08', entry['text'])
+            self.assertIn(TEST_IBAN, entry['text'])
+            self.assertIsNone(entry['error'])
+            names = os.listdir(store.path(testserver.MESSAGES))
+            self.assertIn(initialisation['id'] + '-orderdata.zip', names)
+            self.assertIn(ok['id'] + '-orderdata.xml', names)
+            self.assertNotIn(failed['id'] + '-orderdata.xml', names)
+            for name in names:
+                with open(os.path.join(
+                            store.path(testserver.MESSAGES), name),
+                        'rb') as f:
+                    content = f.read()
+                self.assertNotIn(b'PRIVATE KEY', content, name)
+                self.assertNotIn(testserver.PASSPHRASE.encode(), content,
+                    name)
+
+    def test_order_data_of_fake_bank(self):
+        "FakeBank.order_data: plaintext of the last request, no keys"
+        bank = new_bank()
+        self.assertIsNone(bank.order_data)
+        ebics = new_client(bank)
+        self.assertTrue(ebics.hev().ok)
+        self.assertIsNone(bank.order_data)
+        self.assertTrue(ebics.ini().ok)
+        kind, data = bank.order_data
+        self.assertEqual(kind, 'xml')
+        self.assertIn(b'SignaturePubKeyInfo', data)
+        self.assertTrue(ebics.hia().ok)
+        self.assertIn(b'AuthenticationPubKeyInfo', bank.order_data[1])
+        result = ebics.hpb()
+        kind, data = bank.order_data
+        self.assertEqual(kind, 'xml')
+        root = ebics_xml.parse(data)
+        self.assertEqual(etree.QName(root).localname, 'HPBResponseOrderData')
+        self.assertNotIn(b'PRIVATE', data)
+        ebics.bank_keys = result.data['bank_keys']
+        bank.downloads['camt.053'] = [('a.xml', camt053())]
+        download = ebics.btd_download(CAMT053)
+        # one segment: the last request was the initialisation
+        self.assertEqual(download.num_segments, 1)
+        kind, data = bank.order_data
+        self.assertEqual(kind, 'zip')
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(data)) as container:
+            self.assertEqual(container.read('a.xml'), camt053())
+        ebics.btd_receipt(download.transaction_id)
+        self.assertIsNone(bank.order_data)
+        # not part of the state
+        self.assertNotIn('order_data', bank.to_state())
+
+    def test_order_data_view(self):
+        "Display of a container: size limit, no XML, unreadable"
+        buffer = io.BytesIO()
+        import zipfile
+        with zipfile.ZipFile(buffer, 'w') as container:
+            container.writestr('a.xml', b'<a><b>1</b></a>')
+            container.writestr('b.txt', b'text')
+            container.writestr('c.xml', b'<a>')
+        view = testserver.order_data_view('zip', buffer.getvalue())
+        self.assertIsNone(view['error'])
+        a, b, c = view['files']
+        self.assertEqual(a['text'], '<a>\n  <b>1</b>\n</a>')
+        self.assertEqual(b['error'], 'keine XML-Datei')
+        self.assertIsNotNone(c['error'])
+        self.assertEqual(c['text'], '<a>')
+        self.assertIn('nicht lesbar',
+            testserver.order_data_view('zip', b'garbage')['error'])
+        text, error = testserver.format_xml(
+            b'<!DOCTYPE a [<!ENTITY e "x">]><a>&e;</a>')
+        self.assertIn('DOCTYPE', error)
+        self.assertNotIn('<a>x</a>', text)
+
+    # T5
+    def test_commands(self):
+        "Commands over the API with output and exit code"
+        with running_server(self.directory) as (server, store, out):
+            code, output = self.command(server, 'status')
+            self.assertEqual(code, 0)
+            self.assertIn('Host-ID:   TESTBANK', output)
+            status = self.api(server, 'status')
+            self.assertEqual(status['participants'], [])
+            self.assertIn('Host-ID:   TESTBANK', status['output'])
+            self.assertIn('BTD_tamper', status['known_faults'])
+
+            self.assertEqual(self.command(server, 'release', 'P1', 'U1'),
+                (1, 'Fehler: INI and HIA are missing\n'))
+            ebics = self.client(server, store)
+            self.assertTrue(ebics.ini().ok)
+            self.assertTrue(ebics.hia().ok)
+            self.assertEqual(
+                self.command(server, 'release', 'TESTPARTNER', 'TESTUSER'),
+                (0, 'TESTPARTNER/TESTUSER: ready\n'))
+            # release of an unknown participant adds it as new (E12)
+            self.assertEqual(self.api(server, 'status')['participants'], [
+                    {'partner_id': 'P1', 'user_id': 'U1', 'state': 'new'},
+                    {'partner_id': 'TESTPARTNER', 'user_id': 'TESTUSER',
+                        'state': 'ready'}])
+            code, output = self.command(
+                server, 'make-camt053', '--iban', TEST_IBAN)
+            self.assertEqual(code, 0)
+            self.assertIn('Bereitgestellt: EOP_DE_camt.053_ZIP/', output)
+            self.assertEqual(
+                self.command(server, 'fault', 'BTD', '091008'),
+                (0, 'Fehlerfälle: BTD=091008\n'))
+            self.assertEqual(self.api(server, 'status')['faults'],
+                {'BTD': '091008'})
+            self.assertEqual(self.command(server, 'fault', 'BTD', 'x')[0], 1)
+            self.assertEqual(self.command(server, 'fault', '--clear')[0], 0)
+            self.assertEqual(store.bank().faults, {})
+
+            # rejected
+            code, output = self.command(server, 'serve')
+            self.assertEqual(code, 2)
+            self.assertIn('serve', output)
+            code, output = self.command(server, 'reset')
+            self.assertEqual(code, 1)
+            self.assertIn('--yes', output)
+            self.assertTrue(os.path.exists(store.path(
+                        testserver.PARTICIPANTS)))
+            other = tempfile.mkdtemp(prefix='ebics-ts-')
+            self.addCleanup(shutil.rmtree, other)
+            code, output = self.command(
+                server, 'status', '--state-dir', other)
+            self.assertEqual(code, 2)
+            self.assertEqual(os.listdir(other), [])
+            code, output = self.command(server, 'unknown')
+            self.assertEqual(code, 2)
+            self.assertIn('invalid choice', output)
+            code, output = self.command(server, 'status', '--help')
+            self.assertEqual(code, 0)
+            self.assertIn('--state-dir', output)
+            for body in [b'{"argv": "status"}', b'{"argv": []}',
+                    b'{"argv": [1]}', b'[]']:
+                with self.subTest(body=body):
+                    response = self.request(
+                        server, '/admin/api/command', method='POST',
+                        body=body, content_type='application/json')
+                    if body == b'[]':
+                        self.assertEqual(response.status, 400)
+                    else:
+                        self.assertEqual(response.json()['exit'], 2)
+            self.assertEqual(self.request(
+                    server, '/admin/api/command', method='POST',
+                    body=b'{"argv": ["status"]}',
+                    content_type='text/plain').status, 415)
+            self.assertEqual(self.request(
+                    server, '/admin/api/command', method='POST',
+                    body=b'{', content_type='application/json').status, 400)
+            self.assertEqual(
+                self.request(server, '/admin/api/command').status, 405)
+
+            # demo calls the running server (no deadlock)
+            code, output = self.command(server, 'demo', '--negative')
+            self.assertEqual(code, 0, output)
+            self.assertIn('Bankschlüssel bestätigt', output)
+            self.assertIn('Quittung 011001', output)
+            self.assertIn('Befehl über die Seite: demo (Exit 0)',
+                out.getvalue())
+
+            # reset with --yes (after the question in the page)
+            self.assertEqual(self.command(server, 'reset', '--yes')[0], 0)
+            self.assertFalse(os.path.exists(store.path(
+                        testserver.PARTICIPANTS)))
+            self.assertEqual(self.api(server, 'messages')['total'], 0)
+            self.assertTrue(os.path.exists(store.certificate_path))
+
+    # T6
+    def test_page_source(self):
+        "Contents only via textContent/value; no external resources"
+        with open(ADMIN_PAGE, encoding='utf-8') as f:
+            source = f.read()
+        for forbidden in ['innerHTML', 'outerHTML', 'insertAdjacentHTML',
+                'document.write', 'eval(', 'new Function', 'srcdoc',
+                'http://', 'https://', '@import', 'url(', '<link',
+                '<iframe', 'localStorage', 'sessionStorage']:
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
+        self.assertIsNone(re.search(r'<script[^>]+src', source))
+        self.assertIsNone(re.search(r'<img|<object|<embed', source))
+        self.assertIn('textContent', source)
+        self.assertIn('X-Testserver-Token', source)
+        self.assertIn('location.hash', source)
+        # reset only after a question in the page
+        self.assertTrue(re.search(
+                r'confirm\(.{0,300}?\)\)\s*\{\s*run\(\["reset", "--yes"\]\)',
+                source, re.DOTALL))
+        for command in ['status', 'release', 'suspend', 'make-camt053',
+                'fault', 'demo', 'reset']:
+            with self.subTest(command=command):
+                self.assertIn('data-cmd="%s"' % command, source)
+        self.assertIn('setInterval(poll, 2000)', source)
 
 
 @unittest.skipUnless(testserver, SKIP_TOOL)

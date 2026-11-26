@@ -97,6 +97,12 @@ class FakeBank:
     ch. 7: at most 1 MB).
     received: list of (order type, details) of the processed requests;
     receipts: list of (transaction ID, receipt code).
+    order_data: plaintext of the order data of the last handled request
+    as (kind, bytes) with kind 'xml' or 'zip', else None: INI/HIA the
+    decompressed order data of the request, HPB the bank keys
+    (HPBResponseOrderData) and BTD the ZIP container before compression
+    and encryption (block E13, working paper ch. 4.3); only public data,
+    no private keys.
     A request that cannot be read or is unknown gets the technical code
     061002 EBICS_INVALID_REQUEST instead of an exception (working paper
     E12 ch. 4.4)."""
@@ -117,6 +123,7 @@ class FakeBank:
         self.segment_size = 1048576
         self.transactions = {}
         self.receipts = []
+        self.order_data = None
 
     # public helpers for tests
 
@@ -197,6 +204,7 @@ class FakeBank:
     def handle(self, request):
         """Process the request bytes and return the response bytes; a
         request that cannot be read or is unknown gets 061002"""
+        self.order_data = None
         try:
             root = ebics_xml.parse(request)
         except EbicsError:
@@ -345,6 +353,7 @@ class FakeBank:
             order_data = ebics_xml.parse(data)
         except EbicsError:
             return self._key_management_response('000000', '090004')
+        self.order_data = ('xml', data)
         certificates = {}
         if order_type == 'INI':
             self._validate(order_data, 'signature')
@@ -431,7 +440,9 @@ class FakeBank:
         if self.faults.get('HPB_wrong_key'):
             recipient = keys.create_certificate(
                 keys.generate_key(2048), 'E002', BANK_SUBJECT)
-        data = compression.compress(ebics_xml.to_bytes(order_data))
+        plaintext = ebics_xml.to_bytes(order_data)
+        self.order_data = ('xml', plaintext)
+        data = compression.compress(plaintext)
         if self.faults.get('HPB_garbage'):
             # encrypted for the right key, but not compressed XML
             data = b'not compressed order data'
@@ -628,8 +639,10 @@ class FakeBank:
         if self.faults.get('BTD_wrong_key'):
             recipient = keys.create_certificate(
                 keys.generate_key(2048), 'E002', BANK_SUBJECT)
+        container = self._container(files)
+        self.order_data = ('zip', container)
         encrypted_key, ciphertext = self._encrypt(
-            compression.compress(self._container(files)), recipient)
+            compression.compress(container), recipient)
         text = base64.b64encode(ciphertext).decode('ascii')
         size = self.segment_size
         segments = [text[i:i + size] for i in range(0, len(text), size)]

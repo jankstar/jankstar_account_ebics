@@ -1,0 +1,498 @@
+<!doctype html>
+<!-- This file is part of the account_ebics module for Tryton.
+     The COPYRIGHT file at the top level of this repository contains the
+     full copyright notices and license terms.
+     Web page of the local EBICS test server (block E13, working paper
+     ch. 4.1). One file without external resources; contents only via
+     textContent or value. -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>EBICS-Testserver</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #fff; --line: #d5d9e0; --text: #1d2330;
+  --muted: #667085; --accent: #2457c5; --sel: #e3ebfb;
+  --ok: #1a7f37; --info: #2457c5; --warn: #b35900; --err: #c62828;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181e; --panel: #1d2129; --line: #353b47; --text: #e4e7ec;
+    --muted: #98a2b3; --accent: #7aa2f7; --sel: #26324a;
+    --ok: #57c27a; --info: #7aa2f7; --warn: #f0a35a; --err: #f07373;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--text);
+  display: grid; grid-template-rows: auto 1fr auto; height: 100vh;
+}
+header {
+  display: flex; align-items: center; gap: 16px; padding: 8px 14px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+header h1 { font-size: 15px; margin: 0; }
+header .hint { color: var(--muted); }
+#connection { margin-left: auto; color: var(--muted); }
+#connection.bad { color: var(--err); font-weight: 600; }
+main {
+  display: grid; grid-template-columns: minmax(330px, 26%) 1fr;
+  min-height: 0;
+}
+#list {
+  overflow-y: auto; border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+.item {
+  padding: 5px 10px; border-bottom: 1px solid var(--line); cursor: pointer;
+  display: grid; grid-template-columns: auto 1fr; column-gap: 8px;
+}
+.item:hover { background: var(--sel); }
+.item.selected { background: var(--sel); box-shadow: inset 3px 0 var(--accent); }
+.item .type { font-weight: 600; font-family: var(--mono); }
+.item .time, .item .who { color: var(--muted); font-size: 12px; }
+.item .codes { font-family: var(--mono); font-size: 12px; text-align: right; }
+.k-ok { color: var(--ok); }
+.k-info, .k-no_data { color: var(--info); }
+.k-user_state, .k-bank_keys { color: var(--warn); }
+.k-error { color: var(--err); font-weight: 600; }
+#empty { padding: 12px; color: var(--muted); }
+#detail {
+  display: grid; grid-template-rows: auto 1fr auto; min-height: 0;
+  padding: 8px 12px; gap: 6px;
+}
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+#title { font-weight: 600; font-family: var(--mono); }
+.panes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-height: 0; }
+.pane { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.pane h2, #orderbox h2 { font-size: 12px; margin: 0 0 3px; color: var(--muted); }
+textarea {
+  width: 100%; height: 100%; resize: none; font: 12px/1.35 var(--mono);
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px; padding: 6px;
+  white-space: pre; overflow: auto;
+}
+#orderbox { min-height: 0; }
+#order { height: 22vh; }
+.note { color: var(--warn); font-size: 12px; }
+footer {
+  border-top: 1px solid var(--line); background: var(--panel);
+  padding: 8px 12px; display: grid;
+  grid-template-columns: minmax(520px, 55%) 1fr; gap: 12px;
+}
+.controls { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button {
+  font: inherit; padding: 3px 10px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text);
+}
+button:hover:enabled { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.danger { color: var(--err); }
+input, select {
+  font: 12px var(--mono); padding: 3px 5px; border-radius: 4px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text);
+}
+#argv { flex: 1; min-width: 220px; }
+#output { height: 130px; }
+label { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>EBICS-Testserver</h1>
+  <span class="hint">nur Testdaten · nur 127.0.0.1</span>
+  <span id="connection">verbinde …</span>
+</header>
+<main>
+  <div id="list"><div id="empty">Noch keine Nachrichten.</div></div>
+  <section id="detail">
+    <div class="bar">
+      <span id="title">Keine Nachricht ausgewählt</span>
+      <label><input type="checkbox" id="raw"> roh</label>
+      <label><input type="checkbox" id="full"> Base64 vollständig</label>
+      <label><input type="checkbox" id="follow"> neueste automatisch anzeigen</label>
+    </div>
+    <div class="panes">
+      <div class="pane"><h2 id="reqhead">Anfrage</h2><textarea id="request" readonly spellcheck="false"></textarea></div>
+      <div class="pane"><h2 id="resphead">Antwort</h2><textarea id="response" readonly spellcheck="false"></textarea></div>
+    </div>
+    <div id="orderbox">
+      <h2 id="orderhead">Auftragsdaten</h2>
+      <textarea id="order" readonly spellcheck="false"></textarea>
+    </div>
+  </section>
+</main>
+<footer>
+  <div class="controls">
+    <div class="row">
+      <button data-cmd="status">status</button>
+      <label>Teilnehmer <select id="participant"></select></label>
+      <button data-cmd="release">release</button>
+      <button data-cmd="suspend">suspend</button>
+    </div>
+    <div class="row">
+      <label>IBAN <input id="iban" size="26" value="DE14123456780000004711"></label>
+      <label>Buchungen <input id="entries" size="3" value="5"></label>
+      <button data-cmd="make-camt053">make-camt053</button>
+    </div>
+    <div class="row">
+      <label>Fehlerfall <select id="faultname"></select></label>
+      <input id="faultvalue" size="10" placeholder="Wert">
+      <button data-cmd="fault">fault</button>
+      <button data-cmd="fault-clear">fault --clear</button>
+    </div>
+    <div class="row">
+      <button data-cmd="demo">demo</button>
+      <label><input type="checkbox" id="negative"> --negative</label>
+      <button data-cmd="reset" class="danger">reset</button>
+    </div>
+    <div class="row">
+      <input id="argv" placeholder="Befehl, z. B. add-file EOP/DE/camt.053/ZIP /pfad/datei.xml" spellcheck="false">
+      <button data-cmd="free">Ausführen</button>
+    </div>
+  </div>
+  <textarea id="output" readonly spellcheck="false" placeholder="Ausgabe der Befehle"></textarea>
+</footer>
+<script>
+"use strict";
+(function () {
+  // Token from the URL fragment (#token=...), never sent by the browser
+  // itself; it goes into the header X-Testserver-Token (E13 ch. 4.4).
+  var fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
+  var token = fragment.get("token") || "";
+  var latest = null, total = 0, selected = null, busy = false, polling = false;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function api(path, options) {
+    options = options || {};
+    options.headers = Object.assign(
+      {"X-Testserver-Token": token}, options.headers || {});
+    options.cache = "no-store";
+    return fetch("/admin/api/" + path, options).then(function (response) {
+      return response.json().catch(function () { return {}; })
+        .then(function (data) {
+          if (response.status === 403) {
+            throw new Error("Zugang verweigert: Seite über die URL mit " +
+              "#token=… aus der Startausgabe von serve öffnen");
+          }
+          if (!response.ok) {
+            throw new Error((data && data.error) || ("HTTP " + response.status));
+          }
+          return data;
+        });
+    });
+  }
+
+  function setConnection(text, bad) {
+    var node = $("connection");
+    node.textContent = text;
+    node.className = bad ? "bad" : "";
+  }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) { node.className = cls; }
+    if (text !== undefined && text !== null) { node.textContent = text; }
+    return node;
+  }
+
+  function codeText(code) {
+    return code ? code.code : "-";
+  }
+
+  function worst(message) {
+    var order = ["ok", "info", "no_data", "bank_keys", "user_state", "error"];
+    var result = "ok";
+    [message.technical, message.business].forEach(function (code) {
+      if (code && order.indexOf(code.klass) > order.indexOf(result)) {
+        result = code.klass;
+      }
+    });
+    return result;
+  }
+
+  // message list
+
+  function item(message) {
+    var node = el("div", "item");
+    node.dataset.id = message.id;
+    var type = message.order_type + (message.phase ? " " + message.phase : "");
+    node.appendChild(el("span", "type", type));
+    var codes = el("span", "codes k-" + worst(message),
+      codeText(message.technical) + " / " + codeText(message.business));
+    var symbol = [message.technical, message.business].filter(function (c) {
+      return c && c.symbol && c.code !== "000000";
+    }).map(function (c) { return c.symbol; }).join(", ");
+    codes.title = symbol;
+    node.appendChild(codes);
+    node.appendChild(el("span", "time", message.time.slice(11)));
+    node.appendChild(el("span", "who",
+      (message.participant || "-") + (symbol ? " · " + symbol : "")));
+    node.addEventListener("click", function () { select(message.id); });
+    if (message.id === selected) { node.classList.add("selected"); }
+    return node;
+  }
+
+  function showMessages(messages, replace) {
+    var list = $("list");
+    if (replace) {
+      while (list.firstChild) { list.removeChild(list.firstChild); }
+    }
+    var first = list.querySelector(".item");
+    // the messages come newest first; insert before the old ones
+    messages.forEach(function (message) {
+      list.insertBefore(item(message), first);
+    });
+    if (!list.querySelector(".item")) {
+      list.appendChild(el("div", null, "Noch keine Nachrichten.")).id = "empty";
+    } else if ($("empty")) {
+      $("empty").remove();
+    }
+  }
+
+  function poll() {
+    if (polling) { return; }
+    polling = true;
+    var path = "messages" + (latest ? "?after=" + encodeURIComponent(latest) : "");
+    api(path).then(function (data) {
+      setConnection("verbunden · " + data.total + " Nachrichten", false);
+      if (latest && data.total < total) {
+        // reset: load everything again
+        latest = null;
+        total = 0;
+        return api("messages").then(function (all) {
+          total = all.total;
+          latest = all.latest;
+          showMessages(all.messages, true);
+          clearDetail();
+        });
+      }
+      var replace = latest === null;
+      total = data.total;
+      if (data.latest) { latest = data.latest; }
+      showMessages(data.messages, replace);
+      if ($("follow").checked && data.messages.length) {
+        select(data.messages[0].id);
+      }
+    }).catch(function (error) {
+      setConnection(error.message, true);
+    }).then(function () { polling = false; });
+  }
+
+  // detail
+
+  function clearDetail() {
+    selected = null;
+    $("title").textContent = "Keine Nachricht ausgewählt";
+    $("request").value = "";
+    $("response").value = "";
+    $("order").value = "";
+  }
+
+  function head(text, part) {
+    var result = text + " (" + part.size + " Byte)";
+    if (part.error) { result += " – nicht formatiert: " + part.error; }
+    return result;
+  }
+
+  function orderText(data) {
+    if (!data) { return "keine"; }
+    var lines = [];
+    if (data.error) { lines.push("Hinweis: " + data.error, ""); }
+    if (data.kind === "xml") {
+      (data.certificates || []).forEach(function (c) {
+        lines.push((c.purpose || "?") + "  Hashwert " + (c.hash || "-") +
+          "  " + c.subject);
+      });
+      if (data.certificates && data.certificates.length) { lines.push(""); }
+      lines.push(data.text);
+    } else {
+      lines.push("ZIP-Container, " + data.files.length + " Datei(en):");
+      data.files.forEach(function (f) {
+        lines.push("  " + f.name + "  (" + f.size + " Byte)" +
+          (f.error && !f.text ? "  – " + f.error : ""));
+      });
+      data.files.forEach(function (f) {
+        if (f.text) {
+          lines.push("", "===== " + f.name + " =====");
+          if (f.error) { lines.push("(nicht formatiert: " + f.error + ")"); }
+          lines.push(f.text);
+        }
+      });
+    }
+    return lines.join("\n");
+  }
+
+  function select(id) {
+    selected = id;
+    Array.prototype.forEach.call(document.querySelectorAll(".item"),
+      function (node) {
+        node.classList.toggle("selected", node.dataset.id === id);
+      });
+    var query = "?raw=" + ($("raw").checked ? 1 : 0) +
+      "&full=" + ($("full").checked ? 1 : 0);
+    api("messages/" + encodeURIComponent(id) + query).then(function (data) {
+      if (selected !== id) { return; }
+      $("title").textContent = data.order_type +
+        (data.phase ? " " + data.phase : "") + " · " +
+        (data.participant || "-") + " · " + data.time + " · " +
+        codeText(data.technical) + " / " + codeText(data.business);
+      $("reqhead").textContent = head("Anfrage", data.request);
+      $("resphead").textContent = head("Antwort", data.response);
+      $("request").value = data.request.text;
+      $("response").value = data.response.text;
+      var od = data.order_data;
+      $("orderhead").textContent = "Auftragsdaten" + (od ?
+        " (" + (od.kind === "zip" ? "ZIP" : "XML") + ", " + od.size +
+        " Byte, Klartext)" : "");
+      $("order").value = orderText(od);
+    }).catch(function (error) {
+      $("title").textContent = "Fehler: " + error.message;
+    });
+  }
+
+  $("raw").addEventListener("change", function () { if (selected) { select(selected); } });
+  $("full").addEventListener("change", function () { if (selected) { select(selected); } });
+
+  // status and commands
+
+  function fillSelect(node, values, keep) {
+    var old = node.value;
+    while (node.firstChild) { node.removeChild(node.firstChild); }
+    values.forEach(function (v) {
+      var option = el("option", null, v.label);
+      option.value = v.value;
+      node.appendChild(option);
+    });
+    if (keep && values.some(function (v) { return v.value === old; })) {
+      node.value = old;
+    }
+  }
+
+  function loadStatus(show) {
+    return api("status").then(function (data) {
+      fillSelect($("participant"), data.participants.map(function (p) {
+        return {value: p.partner_id + "\u0000" + p.user_id,
+          label: p.partner_id + "/" + p.user_id + " (" + p.state + ")"};
+      }), true);
+      if (!$("faultname").options.length) {
+        fillSelect($("faultname"), data.known_faults.map(function (f) {
+          return {value: f, label: f};
+        }), false);
+      }
+      if (show) { output("status", 0, data.output); }
+    }).catch(function (error) {
+      if (show) { output("status", "-", "Fehler: " + error.message); }
+    });
+  }
+
+  function output(command, code, text) {
+    $("output").value = "$ " + command + "\n" + text +
+      (text.slice(-1) === "\n" ? "" : "\n") + "[Exit " + code + "]";
+    $("output").scrollTop = 0;
+  }
+
+  function setBusy(value) {
+    busy = value;
+    Array.prototype.forEach.call(document.querySelectorAll("button"),
+      function (node) { node.disabled = value; });
+  }
+
+  function run(argv) {
+    if (busy) { return; }
+    setBusy(true);
+    output(argv.join(" "), "…", "läuft …");
+    api("command", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({argv: argv})
+    }).then(function (data) {
+      output(argv.join(" "), data.exit, data.output);
+    }).catch(function (error) {
+      output(argv.join(" "), "-", "Fehler: " + error.message);
+    }).then(function () {
+      setBusy(false);
+      loadStatus(false);
+      poll();
+    });
+  }
+
+  function split(text) {
+    // words; "..." or '...' keep spaces
+    var result = [], match, pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+    while ((match = pattern.exec(text)) !== null) {
+      result.push(match[1] !== undefined ? match[1] :
+        match[2] !== undefined ? match[2] : match[3]);
+    }
+    return result;
+  }
+
+  function participant() {
+    var value = $("participant").value;
+    return value ? value.split("\u0000") : null;
+  }
+
+  var commands = {
+    "status": function () { output("status", "…", "läuft …"); loadStatus(true); },
+    "release": function () {
+      var p = participant();
+      if (p) { run(["release", p[0], p[1]]); } else {
+        output("release", "-", "Kein Teilnehmer bekannt (zuerst INI/HIA).");
+      }
+    },
+    "suspend": function () {
+      var p = participant();
+      if (p) { run(["suspend", p[0], p[1]]); } else {
+        output("suspend", "-", "Kein Teilnehmer bekannt.");
+      }
+    },
+    "make-camt053": function () {
+      run(["make-camt053", "--iban", $("iban").value.trim(),
+        "--entries", $("entries").value.trim() || "5"]);
+    },
+    "fault": function () {
+      var argv = ["fault", $("faultname").value];
+      if ($("faultvalue").value.trim()) { argv.push($("faultvalue").value.trim()); }
+      run(argv);
+    },
+    "fault-clear": function () { run(["fault", "--clear"]); },
+    "demo": function () {
+      run($("negative").checked ? ["demo", "--negative"] : ["demo"]);
+    },
+    "reset": function () {
+      if (window.confirm("Zustand des Testservers löschen? Das TLS-Zertifikat " +
+          "bleibt; beim nächsten Start gibt es neue Bankschlüssel.")) {
+        run(["reset", "--yes"]);
+      }
+    },
+    "free": function () {
+      var argv = split($("argv").value);
+      if (argv.length) { run(argv); }
+    }
+  };
+
+  Array.prototype.forEach.call(document.querySelectorAll("button[data-cmd]"),
+    function (node) {
+      node.addEventListener("click", commands[node.dataset.cmd]);
+    });
+  $("argv").addEventListener("keydown", function (event) {
+    if (event.key === "Enter") { commands.free(); }
+  });
+
+  if (!token) {
+    setConnection("Kein Token: URL mit #token=… aus der Startausgabe von serve öffnen", true);
+  } else {
+    loadStatus(false);
+    poll();
+    setInterval(poll, 2000);
+  }
+})();
+</script>
+</body>
+</html>

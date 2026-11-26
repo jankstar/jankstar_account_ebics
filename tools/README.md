@@ -5,8 +5,9 @@ HEV, INI, HIA, HPB und BTD mit Quittung. Damit lassen sich die Blöcke
 E06–E09 in der Tryton-Oberfläche von Hand testen, ohne echte Bank.
 
 Kern ist die simulierte Bank der Tests (`tests/fake_bank.py`). Dazu kommen
-HTTPS, ein gespeicherter Zustand, Befehle für die Kommandozeile und ein
-Generator für erfundene camt.053-Dateien (`tests/camt_generator.py`).
+HTTPS, ein gespeicherter Zustand, Befehle für die Kommandozeile, eine
+Weboberfläche (`/admin`, Block E13) und ein Generator für erfundene
+camt.053-Dateien (`tests/camt_generator.py`).
 
 **Nur Testdaten, nur für den Entwicklungsrechner:**
 
@@ -36,6 +37,7 @@ Modulverzeichnis `~/python/trytond/account_ebics`:
 | Angabe | Wert |
 |---|---|
 | URL | `https://127.0.0.1:8443/ebics` (Port mit `--port` änderbar) |
+| Weboberfläche | `https://127.0.0.1:8443/admin#token=…` (vollständige URL in der Startausgabe von `serve`) |
 | Host-ID | `TESTBANK` |
 | Zustandsverzeichnis | `~/python/ebics_testserver_state/` (`--state-dir` oder Umgebungsvariable `EBICS_TESTSERVER_STATE`) |
 | TLS-Zertifikat (`ca_bundle`) | `<Zustandsverzeichnis>/server-cert.pem` |
@@ -55,7 +57,7 @@ Server lauscht nur auf IPv4, deshalb besser `127.0.0.1` verwenden.
 | `transactions.json` | Download-Transaktionen (Segmente, Dateien, BTF, Zeitraum) und Quittungen |
 | `downloads/<BTF>/` | bereitgestellte Dateien, z. B. `downloads/EOP_DE_camt.053_ZIP/`, mit `files.json` (BTF, Datum) |
 | `delivered/<BTF>/` | nach positiver Quittung hierher verschoben |
-| `messages/` | jede Anfrage und Antwort als `<Zeitpunkt>-<Auftragsart>-request.xml` / `-response.xml` |
+| `messages/` | jede Anfrage und Antwort als `<Zeitpunkt>-<Auftragsart>-request.xml` / `-response.xml`; dazu der Klartext der Auftragsdaten als `-orderdata.xml` (INI, HIA entpackt; HPB Bankschlüssel) bzw. `-orderdata.zip` (BTD-Container) |
 | `state.lock` | Dateisperre für Server und Befehle |
 
 Server und Befehle ändern den Zustand nur unter der Sperre. Der Server
@@ -70,7 +72,7 @@ sie nicht in `files.json` steht.
 
 | Befehl | Wirkung |
 |---|---|
-| `serve [--port 8443] [--auto-release] [--xsd-dir DIR]` | Server starten. Beim ersten Start werden Bankschlüssel und TLS-Zertifikat erzeugt. Mit `--xsd-dir` (oder `EBICS_XSD_DIR`) werden eingehende Requests gegen die Schemas H005 geprüft und Abweichungen angezeigt. |
+| `serve [--port 8443] [--auto-release] [--xsd-dir DIR] [--no-admin]` | Server starten. Beim ersten Start werden Bankschlüssel und TLS-Zertifikat erzeugt. Mit `--xsd-dir` (oder `EBICS_XSD_DIR`) werden eingehende Requests gegen die Schemas H005 geprüft und Abweichungen angezeigt. `--no-admin` schaltet die Weboberfläche ab. |
 | `status` | Teilnehmer mit Zustand, Hashwerte X002/E002 der Bank, Dateien je BTF (bereitgestellt / ausgeliefert), offene Transaktionen, Fehlerfälle, Pfad des TLS-Zertifikats |
 | `release <partner_id> <user_id>` | Freigabe nach „Prüfung der Briefe“ (auch: Sperre aufheben) |
 | `suspend <partner_id> <user_id>` | Teilnehmer sperren: HPB und BTD antworten `091004` |
@@ -125,6 +127,94 @@ oder `fault --clear`.
 
 Ein Request, den der Server nicht lesen kann oder nicht kennt, erhält
 `061002 EBICS_INVALID_REQUEST`.
+
+## Weboberfläche
+
+`serve` stellt unter demselben Port die Seite `/admin` bereit. Die
+Startausgabe zeigt die vollständige URL mit dem Zugangstoken, z. B.
+
+```text
+EBICS-Testserver (nur Testdaten)
+  URL:          https://127.0.0.1:8443/ebics
+  Weboberfläche: https://127.0.0.1:8443/admin#token=Xy…
+```
+
+Diese URL im Browser öffnen (am besten kopieren). Das Token wird bei
+jedem Start neu erzeugt und steht nur im Speicher und in dieser Ausgabe;
+nach einem Neustart gilt die alte URL nicht mehr. Der Teil nach `#` wird
+vom Browser nicht an den Server geschickt; die Seite liest ihn und sendet
+das Token im Kopf `X-Testserver-Token` mit jedem Aufruf der Schnittstelle.
+
+Aufbau der Seite:
+
+- **links** die Nachrichtenliste, neueste oben, Aktualisierung alle
+  2 Sekunden: Auftragsart, Phase, Zeit, Teilnehmer, technischer und
+  fachlicher Rückgabecode. Farben: grün OK, blau Information bzw. keine
+  Daten (`011000`, `090005`), orange Teilnehmerzustand (`091002`),
+  rot Fehler.
+- **rechts** nach Klick auf eine Nachricht Anfrage und Antwort, darunter
+  die Auftragsdaten im Klartext: bei INI/HIA die entpackten Schlüssel mit
+  Hashwerten der Zertifikate, bei HPB die Bankschlüssel mit Hashwerten
+  (wie `status`), bei BTD die Dateien des ZIP-Containers mit dem Inhalt der
+  XML-Dateien.
+  - Ohne Häkchen ist das XML mit dem zentralen Parser eingerückt; lange
+    Base64-Werte sind gekürzt („… [n Zeichen gekürzt]“).
+  - „roh“ zeigt die Dateien unverändert, „Base64 vollständig“ das
+    eingerückte XML ohne Kürzung.
+  - „neueste automatisch anzeigen“ springt bei jeder neuen Nachricht auf
+    diese.
+- **unten** Buttons für `status`, `release` und `suspend` (Teilnehmer aus
+  der Auswahlliste), `make-camt053` (IBAN, Anzahl Buchungen), `fault`
+  (Fehlerfall, Wert) und `fault --clear`, `demo` (optional `--negative`),
+  `reset` (mit Rückfrage), dazu ein Eingabefeld für beliebige Befehle
+  (wie auf der Kommandozeile, ohne Programmnamen, z. B.
+  `add-file EOP/DE/camt.053/ZIP /pfad/datei.xml`) und das Ausgabefeld mit
+  Exit-Code.
+
+Regeln für Befehle über die Seite:
+
+- Es laufen dieselben Befehle wie auf der Kommandozeile, nacheinander
+  (ein zweiter Klick wartet).
+- `serve` und `--state-dir` sind über die Seite nicht möglich; `reset`
+  nur nach der Rückfrage der Seite (sie sendet `reset --yes`).
+- `demo` läuft immer gegen den Server, der die Seite ausliefert (`--port`
+  wird ersetzt).
+- Pfade bei `add-file` sind Pfade auf dem Rechner des Servers.
+
+Schutz: Die Seite ist nur über `127.0.0.1` erreichbar. Ohne gültiges Token
+antwortet die Schnittstelle mit 403, ebenso bei einem anderen `Host`-Kopf
+als `127.0.0.1:<Port>` oder `localhost:<Port>`. Inhalte der Nachrichten
+werden nur als Text angezeigt, nie als HTML. Mit `serve --no-admin` ist
+`/admin` abgeschaltet (404); `/ebics` bleibt unverändert.
+
+### Zertifikat im Browser
+
+Der Server hat ein selbstsigniertes Zertifikat; der Browser warnt beim
+ersten Aufruf. Zwei Wege:
+
+1. **Einmal bestätigen:** In Safari „Details einblenden“ → „diese Website
+   besuchen“; in Chrome „Erweitert“ → „Weiter zu 127.0.0.1 (unsicher)“;
+   in Firefox „Erweitert“ → „Risiko akzeptieren und fortfahren“.
+2. **Dem Zertifikat vertrauen (macOS):** `server-cert.pem` aus dem
+   Zustandsverzeichnis in der Schlüsselbundverwaltung öffnen:
+
+   ```bash
+   open ~/python/ebics_testserver_state/server-cert.pem
+   ```
+
+   Das Zertifikat landet im Schlüsselbund „Anmeldung“. Doppelklick auf
+   „localhost“ → „Vertrauen“ → „SSL (Secure Sockets Layer)“: „Immer
+   vertrauen“, Fenster schließen und mit dem Passwort bestätigen. Safari
+   und Chrome nutzen den Schlüsselbund; Firefox hat eine eigene
+   Zertifikatsverwaltung (Weg 1).
+
+   Nach dem Test das Vertrauen wieder entfernen (Zertifikat
+   „localhost / EBICS-Testserver (Testdaten)“ im Schlüsselbund löschen).
+   `reset` behält das Zertifikat; nur wenn `server-cert.pem` gelöscht
+   wird, entsteht ein neues, dem erneut vertraut werden muss.
+
+Die Prüfung des Zertifikats in Tryton und in `demo` bleibt davon
+unberührt (`ca_bundle`).
 
 ## Einstellung in `trytond.conf`
 
@@ -193,7 +283,8 @@ Hinweise:
 
 ## Tests
 
-Die automatischen Tests stehen in `tests/test_testserver.py` (T1–T8). Sie
-starten den Server im Testprozess auf einem zufälligen Port an `127.0.0.1`
-mit einem temporären Zustandsverzeichnis. Ein Test (T5) importiert eine
+Die automatischen Tests stehen in `tests/test_testserver.py` (E12 T1–T8,
+Weboberfläche E13 T1–T6 in `AdminTestCase`). Sie starten den Server im
+Testprozess auf einem zufälligen Port an `127.0.0.1` mit einem temporären
+Zustandsverzeichnis. Ein Test (T5) importiert eine
 erzeugte camt.053 über `account_statement_sepa` (`tests/test_module.py`).

@@ -2,42 +2,54 @@
 # This file is part of the account_ebics module for Tryton.
 # The COPYRIGHT file at the top level of this repository contains the full
 # copyright notices and license terms.
-"""Local EBICS test server for tests by hand (block E12).
+"""Local EBICS test server for tests by hand (blocks E12, E13).
 
 HTTPS frame and command line around the simulated bank of the tests
 (tests/fake_bank.py): HEV, INI, HIA, HPB, BTD with receipt. Only for the
 development computer: bound to 127.0.0.1, own self-signed TLS certificate,
 test data only. Not part of the installed module (no package).
 
+The web page /admin (block E13) shows the messages with their order data
+and runs the commands of the command line; it is protected by a token per
+start, the check of the Host header and security headers.
+
 Usage: see tools/README.md; ebics_testserver.py <command> --help.
-Source: working paper E12 ch. 4 (decisions F1-F12).
+Source: working paper E12 ch. 4 (decisions F1-F12), working paper E13 ch. 4
+(decisions F1-F7).
 """
 import argparse
 import base64
 import contextlib
 import datetime
 import fcntl
+import hmac
 import http.server
+import io
 import ipaddress
 import json
 import os
 import re
+import secrets
 import shutil
 import ssl
 import sys
 import threading
+import types
+import urllib.parse
+import zipfile
 from decimal import Decimal, InvalidOperation
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+from lxml import etree
 
 from trytond.modules.account_ebics.protocol import client, keys, returncodes
 from trytond.modules.account_ebics.protocol import xml as ebics_xml
 from trytond.modules.account_ebics.protocol.exceptions import EbicsError
 from trytond.modules.account_ebics.protocol.transport import HttpsTransport
-from trytond.modules.account_ebics.protocol.xml import NS_HEV
+from trytond.modules.account_ebics.protocol.xml import NS_DS, NS_HEV
 from trytond.modules.account_ebics.tests import camt_generator, fake_bank
 from trytond.modules.account_ebics.tests.fake_bank import (
     BANK_SUBJECT, BTF_PARTS, FAULTS, FakeBank)
@@ -70,6 +82,34 @@ MESSAGES = 'messages'
 FILES = 'files.json'
 #: Kept by reset, so that ca_bundle stays valid
 TLS_FILES = (SERVER_CERT, SERVER_KEY)
+
+# Web page (working paper E13 ch. 4)
+ADMIN_PATH = '/admin'
+API_PATH = '/admin/api/'
+ADMIN_PAGE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'testserver_admin.html')
+TOKEN_HEADER = 'X-Testserver-Token'
+#: Headers of all responses of the web page (working paper E13 ch. 4.4)
+SECURITY_HEADERS = {
+    'Content-Security-Policy': "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'no-store',
+    'X-Frame-Options': 'DENY',
+    }
+#: Stem of the message files: time stamp and order type
+MESSAGE_ID = re.compile(r'[0-9]{8}-[0-9]{6}-[0-9]{6}-[A-Za-z0-9_]{1,40}')
+MESSAGE_KINDS = ('request', 'response')
+ORDER_DATA = 'orderdata'
+MAX_MESSAGES = 200
+MAX_COMMAND_SIZE = 64 * 1024
+#: Text of an element that looks like base64 and is longer is shortened
+BASE64_LIMIT = 120
+BASE64_KEEP = 64
+_BASE64 = re.compile(r'[A-Za-z0-9+/=\s]+')
+#: Display of the files of a BTD container
+MAX_CONTAINER_FILES = 100
+MAX_SHOWN_FILE = 5 * 1024 * 1024
 
 
 # State directory (working paper E12 ch. 4.3)
@@ -353,9 +393,12 @@ class StateStore:
             self.load_state(), self.keyring(), xsd_dir=xsd_dir,
             auto_release=auto_release)
 
-    def save_message(self, order_type, request, response, now=None):
-        """Store request and response under messages/ (test data only);
-        return the path of the request"""
+    def save_message(self, order_type, request, response, now=None,
+            order_data=None):
+        """Store request and response under messages/ (test data only),
+        with the plaintext of the order data (kind 'xml' or 'zip', bytes)
+        as <stem>-orderdata.<kind> (working paper E13 ch. 4.3); return the
+        path of the request"""
         now = now or datetime.datetime.now()
         directory = self.path(MESSAGES)
         os.makedirs(directory, exist_ok=True)
@@ -367,6 +410,12 @@ class StateStore:
             with open(path, 'wb') as f:
                 f.write(data or b'')
             paths.append(path)
+        if order_data is not None:
+            kind, data = order_data
+            path = os.path.join(
+                directory, '%s-%s.%s' % (stem, ORDER_DATA, kind))
+            with open(path, 'wb') as f:
+                f.write(data)
         return paths[0]
 
     def reset(self):
@@ -448,6 +497,324 @@ def response_codes(data):
             required=False))
 
 
+# Web page (working paper E13 ch. 4)
+
+def _code(code, kind=returncodes.TECHNICAL):
+    if not code:
+        return None
+    result = returncodes.lookup(code, kind)
+    return {'code': result.code, 'symbol': result.symbol,
+        'klass': result.klass}
+
+
+def _shorten_base64(root):
+    "Shorten long texts that look like base64 (decision F7)"
+    for node in root.iter():
+        if not isinstance(node.tag, str) or not node.text:
+            continue
+        text = node.text.strip()
+        if len(text) > BASE64_LIMIT and _BASE64.fullmatch(text):
+            node.text = '%s… [%d Zeichen gekürzt]' % (
+                text[:BASE64_KEEP], len(text) - BASE64_KEEP)
+
+
+def format_xml(data, raw=False, full=False):
+    """Return (text, error) of XML data for the display: indented after
+    parsing with the central parser (specification ch. 8.4), long base64
+    values shortened unless full; raw returns the data unchanged"""
+    if raw:
+        return data.decode('utf-8', 'replace'), None
+    try:
+        root = ebics_xml.parse(data)
+    except EbicsError as exception:
+        return data.decode('utf-8', 'replace'), str(exception)
+    if not full:
+        _shorten_base64(root)
+    etree.indent(root, space='  ')
+    return etree.tostring(root, encoding='unicode'), None
+
+
+def _certificates(data):
+    """Return the certificates of order data (INI, HIA, HPB) with purpose,
+    hash value (decision D9) and subject"""
+    try:
+        root = ebics_xml.parse(data)
+    except EbicsError:
+        return []
+    result = []
+    for node in root.iter(ebics_xml.qname('X509Certificate', NS_DS)):
+        parent = node.getparent()
+        info = parent.getparent() if parent is not None else None
+        purpose = None
+        for child in info if info is not None else []:
+            if (isinstance(child.tag, str)
+                    and etree.QName(child).localname.endswith('Version')):
+                purpose = (child.text or '').strip()
+        try:
+            certificate = x509.load_der_x509_certificate(
+                base64.b64decode(node.text or '', validate=False))
+        except ValueError:
+            result.append({'purpose': purpose, 'hash': None,
+                    'subject': 'Zertifikat nicht lesbar'})
+            continue
+        result.append({
+                'purpose': purpose,
+                'hash': keys.certificate_hash(certificate),
+                'subject': certificate.subject.rfc4514_string(),
+                })
+    return result
+
+
+def order_data_view(kind, data, raw=False, full=False):
+    """Display of the stored order data: XML formatted with the
+    certificates and their hash values (INI, HIA, HPB), ZIP as list of files
+    with the formatted content of the XML files (BTD); working paper E13
+    ch. 4.3"""
+    if kind == 'xml':
+        text, error = format_xml(data, raw, full)
+        return {'kind': kind, 'size': len(data), 'text': text,
+            'error': error, 'certificates': _certificates(data)}
+    files = []
+    error = None
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as container:
+            infos = container.infolist()
+            if len(infos) > MAX_CONTAINER_FILES:
+                error = 'Nur die ersten %d von %d Dateien' % (
+                    MAX_CONTAINER_FILES, len(infos))
+            for info in infos[:MAX_CONTAINER_FILES]:
+                entry = {'name': info.filename, 'size': info.file_size,
+                    'text': None, 'error': None}
+                files.append(entry)
+                if info.is_dir():
+                    continue
+                if info.file_size > MAX_SHOWN_FILE:
+                    entry['error'] = 'zu groß für die Anzeige'
+                    continue
+                with container.open(info) as f:
+                    content = f.read(MAX_SHOWN_FILE + 1)
+                if len(content) > MAX_SHOWN_FILE:
+                    entry['error'] = 'zu groß für die Anzeige'
+                elif (info.filename.lower().endswith('.xml')
+                        or content.lstrip()[:1] == b'<'):
+                    entry['text'], entry['error'] = format_xml(
+                        content, raw, full)
+                else:
+                    entry['error'] = 'keine XML-Datei'
+    except (zipfile.BadZipFile, OSError, ValueError,
+            NotImplementedError) as exception:
+        error = 'Container nicht lesbar: %s' % type(exception).__name__
+    return {'kind': kind, 'size': len(data), 'files': files, 'error': error}
+
+
+class _ParserExit(Exception):
+    def __init__(self, status):
+        super().__init__(status)
+        self.status = status
+
+
+def _buffered_parser(out, state_dir):
+    """The parser() of the command line with the output of argparse (help,
+    errors) in out instead of the console and without leaving the process"""
+    class BufferedParser(argparse.ArgumentParser):
+        def _print_message(self, message, file=None):
+            if message:
+                out.write(message)
+
+        def exit(self, status=0, message=None):
+            if message:
+                out.write(message)
+            raise _ParserExit(status)
+    return parser(BufferedParser, state_dir)
+
+
+class AdminApp:
+    """The web page of the test server: messages with order data, status,
+    commands (working paper E13 ch. 4). token: access token of this start,
+    only in memory."""
+
+    def __init__(self, store, token, port, out=None):
+        self.store = store
+        self.token = token
+        self.port = port
+        self.out = out or sys.stdout
+        #: the commands run one after the other (decision F5)
+        self.command_lock = threading.Lock()
+        self._summaries = {}
+        self._summary_lock = threading.Lock()
+
+    # access (working paper E13 ch. 4.4)
+
+    def host_allowed(self, host):
+        "Only 127.0.0.1:<port> or localhost:<port> (DNS rebinding)"
+        return (host or '').strip().lower() in {
+            '%s:%s' % (HOST, self.port), 'localhost:%s' % self.port}
+
+    def token_valid(self, token):
+        return bool(token) and hmac.compare_digest(
+            token.encode('utf-8', 'replace'), self.token.encode('ascii'))
+
+    # messages
+
+    def _message_path(self, message_id, kind):
+        return self.store.path(
+            MESSAGES, '%s-%s.xml' % (message_id, kind))
+
+    def message_ids(self):
+        "IDs (stems of the file names) of the messages, newest first"
+        directory = self.store.path(MESSAGES)
+        if not os.path.isdir(directory):
+            return []
+        ids = set()
+        for name in os.listdir(directory):
+            match = re.fullmatch(r'(.+)-request\.xml', name)
+            if match and MESSAGE_ID.fullmatch(match.group(1)):
+                ids.add(match.group(1))
+        return sorted(ids, reverse=True)
+
+    def _order_data_file(self, message_id):
+        for kind in ['xml', 'zip']:
+            path = self.store.path(
+                MESSAGES, '%s-%s.%s' % (message_id, ORDER_DATA, kind))
+            if os.path.isfile(path):
+                return kind, path
+        return None, None
+
+    def _read(self, message_id, kind):
+        try:
+            with open(self._message_path(message_id, kind), 'rb') as f:
+                return f.read()
+        except FileNotFoundError:
+            return b''
+
+    def _summary(self, message_id, transactions):
+        request = self._read(message_id, 'request')
+        response = self._read(message_id, 'response')
+        _, phase, participant = describe_request(request, transactions)
+        technical, business = response_codes(response)
+        stamp = datetime.datetime.strptime(
+            message_id[:22], '%Y%m%d-%H%M%S-%f')
+        return {
+            'id': message_id,
+            'time': stamp.isoformat(sep=' ', timespec='milliseconds'),
+            'order_type': message_id[23:],
+            'phase': phase,
+            'participant': participant,
+            'technical': _code(technical),
+            'business': _code(business, returncodes.BUSINESS),
+            'order_data': self._order_data_file(message_id)[0],
+            }
+
+    def _transactions(self):
+        "Download transactions for describe_request (participant of BTD)"
+        data = _read_json(self.store.path(TRANSACTIONS), {})
+        return types.SimpleNamespace(transactions={
+                key.upper(): value
+                for key, value in data.get('transactions', {}).items()})
+
+    def summaries(self, ids):
+        "Summaries of the messages (cached, the files do not change)"
+        with self._summary_lock:
+            missing = [i for i in ids if i not in self._summaries]
+            if missing:
+                transactions = self._transactions()
+                for message_id in missing:
+                    self._summaries[message_id] = self._summary(
+                        message_id, transactions)
+            return [self._summaries[i] for i in ids]
+
+    def messages(self, after=None):
+        """JSON of GET /admin/api/messages: the newest MAX_MESSAGES, with
+        after only those newer than this ID"""
+        ids = self.message_ids()
+        with self._summary_lock:
+            # forget messages deleted by reset
+            for message_id in set(self._summaries) - set(ids):
+                del self._summaries[message_id]
+        total = len(ids)
+        latest = ids[0] if ids else None
+        if after:
+            ids = [i for i in ids if i > after]
+        ids = ids[:MAX_MESSAGES]
+        return {'messages': self.summaries(ids), 'total': total,
+            'latest': latest}
+
+    def message(self, message_id, raw=False, full=False):
+        """JSON of GET /admin/api/messages/<id>; None if unknown"""
+        if (not MESSAGE_ID.fullmatch(message_id or '')
+                or not os.path.isfile(
+                    self._message_path(message_id, 'request'))):
+            return None
+        result = dict(self.summaries([message_id])[0])
+        for kind in MESSAGE_KINDS:
+            data = self._read(message_id, kind)
+            text, error = format_xml(data, raw, full)
+            result[kind] = {'size': len(data), 'text': text, 'error': error}
+        kind, path = self._order_data_file(message_id)
+        result['order_data'] = None
+        if kind:
+            with open(path, 'rb') as f:
+                result['order_data'] = order_data_view(
+                    kind, f.read(), raw, full)
+        return result
+
+    # status and commands
+
+    def status(self):
+        "JSON of GET /admin/api/status: output of status and participants"
+        out = io.StringIO()
+        cmd_status(None, self.store, out)
+        with self.store.lock():
+            bank = self.store.bank()
+        return {
+            'output': out.getvalue(),
+            'participants': [{
+                    'partner_id': partner_id, 'user_id': user_id,
+                    'state': participant.state}
+                for (partner_id, user_id), participant in sorted(
+                    bank.participants.items())],
+            'faults': dict(bank.faults),
+            'known_faults': sorted(FAULTS),
+            }
+
+    def command(self, argv):
+        """Run a command of the command line with the output in a buffer;
+        return (exit code, output). Not possible: serve, reset without
+        --yes, another state directory (working paper E13 ch. 4.2)"""
+        if (not isinstance(argv, list) or not argv or len(argv) > 50
+                or not all(isinstance(a, str) and len(a) <= 1000
+                    for a in argv)):
+            return 2, "Fehler: argv muss eine Liste von Texten sein\n"
+        out = io.StringIO()
+        with self.command_lock:
+            try:
+                args = _buffered_parser(
+                    out, self.store.directory).parse_args(argv)
+            except _ParserExit as exit_:
+                return exit_.status, out.getvalue()
+            if args.command == 'serve':
+                return 2, "Fehler: serve ist über die Seite nicht möglich\n"
+            if StateStore(args.state_dir).directory != self.store.directory:
+                return 2, ("Fehler: --state-dir ist über die Seite nicht "
+                    "möglich\n")
+            if args.command == 'reset' and not args.yes:
+                return 1, ("Fehler: reset über die Seite nur mit --yes "
+                    "(nach Rückfrage)\n")
+            if args.command == 'demo':
+                # against this server
+                args.port = self.port
+            try:
+                code = args.func(args, self.store, out)
+            except Exception as exception:
+                print("Interner Fehler: %s" % type(exception).__name__,
+                    file=out)
+                code = 1
+        print('%s  Befehl über die Seite: %s (Exit %s)' % (
+                datetime.datetime.now().strftime('%H:%M:%S'), args.command,
+                code), file=self.out, flush=True)
+        return code, out.getvalue()
+
+
 class TestServerApp:
     """Processing of one request: load the state, let the simulated bank
     answer, store state and messages, print one line"""
@@ -466,7 +833,8 @@ class TestServerApp:
             order_type, phase, participant = describe_request(data, bank)
             response = bank.handle(data)
             self.store.save_state(bank.to_state())
-            self.store.save_message(order_type, data, response, now)
+            self.store.save_message(
+                order_type, data, response, now, bank.order_data)
         technical, business = response_codes(response)
         symbol = returncodes.lookup(technical).symbol if technical else ''
         line = '%s  %-4s %-14s %-24s %s / %s  %s' % (
@@ -485,14 +853,109 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     server_version = 'ebics-testserver'
     sys_version = ''
 
-    def _reply(self, status, body=b'', content_type='text/plain'):
+    def _reply(self, status, body=b'', content_type='text/plain',
+            headers=None):
         self.send_response(status)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
+    # web page (working paper E13 ch. 4.1, 4.4)
+
+    def _is_admin(self):
+        path = urllib.parse.urlsplit(self.path).path
+        return path == ADMIN_PATH or path.startswith(ADMIN_PATH + '/')
+
+    def _admin_reply(self, status, body=b'', content_type='text/plain'):
+        self._reply(status, body, content_type, SECURITY_HEADERS)
+
+    def _json(self, status, data):
+        self._admin_reply(status, json.dumps(
+                data, ensure_ascii=False).encode('utf-8'),
+            'application/json; charset=utf-8')
+
+    def _error(self, status, text):
+        self._json(status, {'error': text})
+
+    def _admin(self, method):
+        admin = self.server.admin
+        if admin is None:
+            # serve --no-admin
+            return self._reply(404, b'not found\n')
+        if not admin.host_allowed(self.headers.get('Host')):
+            return self._admin_reply(403, b'forbidden\n')
+        split = urllib.parse.urlsplit(self.path)
+        path = split.path
+        if path == ADMIN_PATH:
+            if method != 'GET':
+                return self._admin_reply(405, b'only GET\n')
+            with open(ADMIN_PAGE, 'rb') as f:
+                page = f.read()
+            return self._admin_reply(200, page, 'text/html; charset=utf-8')
+        if not path.startswith(API_PATH):
+            return self._admin_reply(404, b'not found\n')
+        if not admin.token_valid(self.headers.get(TOKEN_HEADER)):
+            return self._error(403, 'Token fehlt oder ist ungültig')
+        route = path[len(API_PATH):]
+        query = urllib.parse.parse_qs(split.query)
+
+        def flag(name):
+            return query.get(name, [''])[0].lower() in {'1', 'true', 'ja'}
+        if route == 'command':
+            if method != 'POST':
+                return self._error(405, 'nur POST')
+            return self._command(admin)
+        if method != 'GET':
+            return self._error(405, 'nur GET')
+        if route == 'messages':
+            after = query.get('after', [None])[0]
+            if after is not None and not MESSAGE_ID.fullmatch(after):
+                return self._error(400, 'ungültiger Wert für after')
+            return self._json(200, admin.messages(after))
+        if route.startswith('messages/'):
+            result = admin.message(
+                route[len('messages/'):], flag('raw'), flag('full'))
+            if result is None:
+                return self._error(404, 'Nachricht nicht gefunden')
+            return self._json(200, result)
+        if route == 'status':
+            return self._json(200, admin.status())
+        return self._error(404, 'nicht gefunden')
+
+    def _command(self, admin):
+        content_type = self.headers.get('Content-Type', '')
+        if content_type.split(';')[0].strip().lower() != 'application/json':
+            return self._error(415, 'application/json erforderlich')
+        length = self.headers.get('Content-Length', '')
+        if not length.isdigit():
+            return self._error(411, 'Content-Length erforderlich')
+        if int(length) > MAX_COMMAND_SIZE:
+            return self._error(413, 'Anfrage zu groß')
+        try:
+            data = json.loads(self.rfile.read(int(length)))
+        except ValueError:
+            return self._error(400, 'kein gültiges JSON')
+        if not isinstance(data, dict):
+            return self._error(400, 'JSON-Objekt mit argv erwartet')
+        code, output = admin.command(data.get('argv'))
+        return self._json(200, {'exit': code, 'output': output})
+
+    def _safe_admin(self, method):
+        try:
+            self._admin(method)
+        except Exception as exception:
+            print('Interner Fehler (Seite): %s' % type(exception).__name__,
+                file=self.server.app.out, flush=True)
+            self._admin_reply(500, b'internal error\n')
+
+    # EBICS (working paper E12 ch. 4.2)
+
     def do_POST(self):
+        if self._is_admin():
+            return self._safe_admin('POST')
         if self.path != PATH:
             return self._reply(404, b'not found\n')
         content_type = self.headers.get('Content-Type', '')
@@ -513,9 +976,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self._reply(200, response, 'text/xml; charset=UTF-8')
 
     def do_GET(self):
+        if self._is_admin():
+            return self._safe_admin('GET')
         self._reply(405, b'only POST\n')
 
-    do_PUT = do_DELETE = do_HEAD = do_GET
+    def do_PUT(self):
+        self._reply(405, b'only POST\n')
+
+    do_DELETE = do_HEAD = do_PUT
 
     def log_message(self, format, *args):
         # one line per request is printed by TestServerApp
@@ -527,10 +995,15 @@ class TestServer(http.server.ThreadingHTTPServer):
     thread of the connection"""
     daemon_threads = True
 
-    def __init__(self, app, port, context):
+    def __init__(self, app, port, context, admin=True):
         self.app = app
         self.ssl_context = context
         super().__init__((HOST, port), _Handler)
+        #: web page; None with serve --no-admin (decision F6 of E13)
+        self.admin = None
+        if admin:
+            self.admin = AdminApp(app.store, secrets.token_urlsafe(32),
+                self.server_address[1], app.out)
 
     def finish_request(self, request, client_address):
         request.settimeout(30)
@@ -560,18 +1033,24 @@ def tls_context(store):
 
 
 def make_server(store, port=DEFAULT_PORT, auto_release=False, xsd_dir=None,
-        out=None):
+        out=None, admin=True):
     """Return the HTTPS test server (not yet started) for the state
-    directory; port 0 chooses a free port"""
+    directory; port 0 chooses a free port; admin: web page /admin with a
+    new token (server.admin.token, only in memory)"""
     with store.lock():
         store.ensure(out)
         store.save_state(store.load_state())
     app = TestServerApp(store, auto_release, xsd_dir, out)
-    return TestServer(app, port, tls_context(store))
+    return TestServer(app, port, tls_context(store), admin)
 
 
 def url(port=DEFAULT_PORT):
     return 'https://%s:%s%s' % (HOST, port, PATH)
+
+
+def admin_url(port, token):
+    "URL of the web page with the token in the fragment (not sent)"
+    return 'https://%s:%s%s#token=%s' % (HOST, port, ADMIN_PATH, token)
 
 
 # Commands (working paper E12 ch. 4.5)
@@ -590,10 +1069,16 @@ def _changed(store):
 
 def cmd_serve(args, store, out):
     server = make_server(store, args.port, args.auto_release, args.xsd_dir,
-        out)
+        out, admin=not args.no_admin)
     port = server.server_address[1]
     print("EBICS-Testserver (nur Testdaten)", file=out)
     print("  URL:          %s" % url(port), file=out)
+    if server.admin:
+        # the token only here, never in files (working paper E13 ch. 4.4)
+        print("  Weboberfläche: %s" % admin_url(port, server.admin.token),
+            file=out)
+    else:
+        print("  Weboberfläche: ausgeschaltet (--no-admin)", file=out)
     print("  Host-ID:      %s" % HOST_ID, file=out)
     print("  ca_bundle:    %s" % store.certificate_path, file=out)
     print("  Zustand:      %s" % store.directory, file=out)
@@ -867,14 +1352,17 @@ def _date(value):
     return datetime.date.fromisoformat(value)
 
 
-def parser():
-    "Command line (working paper E12 ch. 4.5)"
-    common = argparse.ArgumentParser(add_help=False)
+def parser(parser_class=argparse.ArgumentParser, state_dir=None):
+    """Command line (working paper E12 ch. 4.5); the web page uses it with
+    another parser_class (output into a buffer) and its state directory as
+    default (working paper E13 ch. 4.2)"""
+    common = parser_class(add_help=False)
     common.add_argument(
         '--state-dir',
-        default=os.environ.get('EBICS_TESTSERVER_STATE', DEFAULT_STATE_DIR),
+        default=state_dir or os.environ.get(
+            'EBICS_TESTSERVER_STATE', DEFAULT_STATE_DIR),
         help="Zustandsverzeichnis (Vorgabe %(default)s)")
-    result = argparse.ArgumentParser(
+    result = parser_class(
         description="Lokaler EBICS-Testserver (nur Testdaten, nur %s)"
         % HOST)
     commands = result.add_subparsers(dest='command', required=True)
@@ -886,6 +1374,8 @@ def parser():
         help="Freigabe sofort nach INI und HIA")
     command.add_argument('--xsd-dir', default=os.environ.get('EBICS_XSD_DIR'),
         help="Schemas H005 für die Prüfung der Requests")
+    command.add_argument('--no-admin', action='store_true',
+        help="ohne Weboberfläche /admin")
     command.set_defaults(func=cmd_serve)
 
     command = commands.add_parser(
