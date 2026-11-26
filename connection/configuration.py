@@ -1,11 +1,15 @@
 # This file is part of the account_ebics module for Tryton.
 # The COPYRIGHT file at the top level of this repository contains the full
 # copyright notices and license terms.
+import datetime
 import hashlib
 import io
+import json
 import re
 import zipfile
 
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 from sql import Select
 
 from trytond import config
@@ -50,6 +54,20 @@ KEY_ORDERS = {
     'INI': 'ini_sent',
     'HIA': 'hia_sent',
     }
+#: States from which HPB is possible (working paper E07 ch. 4.1, F4)
+HPB_STATES = {'ini_sent', 'bank_keys_received', 'active', 'suspended'}
+#: States with confirmed bank keys (D7)
+CONFIRMED_STATES = {'active', 'suspended'}
+#: Purposes of the bank keys (EBICS specification V 3.0.2 (DE) ch. 4.4.2)
+BANK_PURPOSES = ('X002', 'E002')
+BANK_KEYS_VERSION = 1
+#: Result of the comparison with the hash values published by the bank
+HASH_CHECKS = [
+    (None, ""),
+    ('match', "Match"),
+    ('mismatch', "Mismatch"),
+    ('no_expected', "No Value of the Bank"),
+    ]
 #: Fields cleared when resetting to draft (working paper E06 ch. 4.6)
 RESET_VALUES = {
     'keyring_data': None,
@@ -62,6 +80,7 @@ RESET_VALUES = {
     'ini_sent': False,
     'hia_sent': False,
     'state': 'draft',
+    'confirmed_state': None,
     }
 
 
@@ -125,6 +144,79 @@ def payload(result):
         if result is not None and result.response:
             container.writestr('response.xml', result.response)
     return buffer.getvalue()
+
+
+def bank_keys_zip(bank_keys, host_id, now=None):
+    """Container of the bank keys (working paper E07 F2): ZIP with X002.pem,
+    E002.pem and manifest.json (version, received, host_id, per purpose
+    version and hash value); public data only, not encrypted"""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    manifest = {
+        'version': BANK_KEYS_VERSION,
+        'received': now.astimezone(datetime.timezone.utc).isoformat(),
+        'host_id': host_id,
+        'keys': {},
+        }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as container:
+        for purpose in BANK_PURPOSES:
+            certificate = bank_keys[purpose]['certificate']
+            container.writestr(
+                purpose + '.pem',
+                certificate.public_bytes(serialization.Encoding.PEM))
+            manifest['keys'][purpose] = {
+                'version': bank_keys[purpose]['version'],
+                'hash': keys.certificate_hash(certificate),
+                }
+        container.writestr(
+            'manifest.json', json.dumps(manifest, indent=2, sort_keys=True))
+    return buffer.getvalue()
+
+
+def load_bank_keys(data):
+    """{purpose: certificate} of the container of bank_keys_zip(); the hash
+    values must match the manifest"""
+    result = {}
+    with zipfile.ZipFile(io.BytesIO(bytes(data))) as container:
+        names = set(container.namelist())
+        expected = {p + '.pem' for p in BANK_PURPOSES} | {'manifest.json'}
+        if names != expected:
+            raise ValueError("Unexpected files in the bank keys")
+        for name in expected:
+            if container.getinfo(name).file_size > 1024 * 1024:
+                raise ValueError("File too big in the bank keys")
+        manifest = json.loads(container.read('manifest.json'))
+        if manifest.get('version') != BANK_KEYS_VERSION:
+            raise ValueError("Unknown version of the bank keys")
+        for purpose in BANK_PURPOSES:
+            certificate = x509.load_pem_x509_certificate(
+                container.read(purpose + '.pem'))
+            if (keys.certificate_hash(certificate)
+                    != manifest['keys'][purpose]['hash']):
+                raise ValueError("Hash value of the bank key %s" % purpose)
+            result[purpose] = certificate
+    return result
+
+
+def compare_hash(value, expected):
+    "Result of the comparison (HASH_CHECKS) of a bank hash value"
+    if not value:
+        return None
+    if not expected:
+        return 'no_expected'
+    return 'match' if normalize_hash(expected) == value else 'mismatch'
+
+
+def overall_check(checks):
+    """One result for X002 and E002: mismatch if one differs, match only if
+    both match, otherwise no_expected (the comparison by sight is needed)"""
+    if any(c is None for c in checks):
+        return None
+    if 'mismatch' in checks:
+        return 'mismatch'
+    if all(c == 'match' for c in checks):
+        return 'match'
+    return 'no_expected'
 
 
 def normalize_hash(value):
@@ -196,6 +288,19 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
         "the bank (64 hexadecimal characters, spaces are ignored).")
     ini_sent = fields.Boolean("INI Sent", readonly=True)
     hia_sent = fields.Boolean("HIA Sent", readonly=True)
+    # display in groups of two (decision F8 of E07, F6 of E06)
+    bank_x002_hash_groups = fields.Function(
+        fields.Text("Bank X002 Hash"), 'get_hash_groups')
+    bank_e002_hash_groups = fields.Function(
+        fields.Text("Bank E002 Hash"), 'get_hash_groups')
+    bank_x002_hash_expected_groups = fields.Function(
+        fields.Text("Expected Bank X002 Hash"), 'get_hash_groups')
+    bank_e002_hash_expected_groups = fields.Function(
+        fields.Text("Expected Bank E002 Hash"), 'get_hash_groups')
+    bank_x002_hash_check = fields.Function(
+        fields.Selection(HASH_CHECKS, "X002 Comparison"), 'get_hash_check')
+    bank_e002_hash_check = fields.Function(
+        fields.Selection(HASH_CHECKS, "E002 Comparison"), 'get_hash_check')
 
     formats = fields.Many2Many(
         'account.ebics.configuration-account.ebics.format',
@@ -207,6 +312,16 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
     last_fetch = fields.DateTime("Last Fetch", readonly=True)
     state = fields.Selection(
         STATES, "State", required=True, readonly=True, sort=False)
+    # E07.1 (F9): state before the fall back to bank_keys_received, the
+    # state after the confirmation; empty means active (also for the
+    # records before E07.1, no migration needed)
+    confirmed_state = fields.Selection([
+            (None, ""),
+            ('active', "Active"),
+            ('suspended', "Suspended"),
+            ], "State after Confirmation", readonly=True, sort=False,
+        help="The state the connection gets when the bank keys are "
+        "confirmed.")
     accounts = fields.One2Many(
         'account.ebics.account', 'configuration', "Accounts")
     logs = fields.One2Many(
@@ -250,6 +365,23 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
                     'invisible': ~Bool(Eval('hia_sent')),
                     'depends': ['hia_sent'],
                     },
+                # working paper E07 ch. 4.1
+                'fetch_bank_keys': {
+                    'invisible': ~Eval('state').in_(sorted(HPB_STATES)),
+                    'depends': ['state'],
+                    },
+                'confirm_bank_keys': {
+                    'invisible': Eval('state') != 'bank_keys_received',
+                    'depends': ['state'],
+                    },
+                'suspend': {
+                    'invisible': Eval('state') != 'active',
+                    'depends': ['state'],
+                    },
+                'reactivate': {
+                    'invisible': Eval('state') != 'suspended',
+                    'depends': ['state'],
+                    },
                 })
 
     @classmethod
@@ -291,6 +423,16 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
             return []
         formats = Format.search([('id', '=', format_id)])
         return [f.id for f in formats]
+
+    def get_hash_groups(self, name):
+        value = getattr(self, name[:-len('_groups')])
+        return '\n'.join(format_hash(value)) if value else None
+
+    def get_hash_check(self, name):
+        purpose = name.split('_')[1]
+        return compare_hash(
+            getattr(self, 'bank_%s_hash' % purpose),
+            getattr(self, 'bank_%s_hash_expected' % purpose))
 
     @fields.depends('bank_x002_hash_expected')
     def on_change_bank_x002_hash_expected(self):
@@ -498,45 +640,99 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
         pass
 
     def _send_key_order(self, order_type):
-        """Send INI or HIA in a transaction of its own: advisory lock,
-        order, log and flags are committed together, also the log of a
-        failed order (decisions F3, F11 of E06); then the message"""
+        "Send INI or HIA (working paper E06 ch. 4.2)"
+        flag = KEY_ORDERS[order_type]
+
+        def allowed(configuration):
+            return (configuration.state == 'keys_generated'
+                and not getattr(configuration, flag))
+
+        def succeeded(configuration, result):
+            values = {flag: True}
+            if all(getattr(configuration, f)
+                    for f in KEY_ORDERS.values() if f != flag):
+                values['state'] = 'ini_sent'
+            configuration._write_internal(values)
+        self._run_order(
+            order_type, lambda ebics: getattr(ebics, order_type.lower())(),
+            allowed, succeeded)
+
+    def _run_order(self, order_type, call, allowed, succeeded):
+        """Frame of every order (D27): in a transaction of its own an
+        advisory lock, the state checked again, the order, the log, the
+        changes of a success or of 091008; committed also when the order
+        fails; then the message in the request transaction"""
         keyring = self._load_keyring()
         ebics = self._ebics_client(keyring)
         # committed at the end of the block, rolled back only on an
         # unexpected exception
         with Transaction().new_transaction(), without_check_access():
-            result, error = self.__class__(self.id)._key_order(
-                order_type, ebics)
+            result, error = self.__class__(self.id)._order_in_transaction(
+                order_type, ebics, call, allowed, succeeded)
         if result is None and error is None:
-            # already sent or not in the state any more
-            return
+            # already done or not in the state any more
+            return None
         self._raise_order_error(order_type, result, error)
+        return result
 
-    def _key_order(self, order_type, ebics):
-        """In the transaction of the order: lock, check the state again, run
-        the order, record the log, set the flag and maybe the state"""
+    def _order_in_transaction(
+            self, order_type, ebics, call, allowed, succeeded):
+        "Part of _run_order in the transaction of the order"
         pool = Pool()
         Log = pool.get('account.ebics.log')
-        flag = KEY_ORDERS[order_type]
         self._lock_order(self)
-        if self.state != 'keys_generated' or getattr(self, flag):
+        if not allowed(self):
             return None, None
         error = None
         try:
-            result = getattr(ebics, order_type.lower())()
+            result = call(ebics)
         except EbicsError as exception:
             error = exception
             result = getattr(exception, 'result', None)
         Log.record(self, order_type, self._log_values(result, error))
         if error is None and result.ok:
-            values = {flag: True}
-            other = [f for f in KEY_ORDERS.values() if f != flag]
-            if all(getattr(self, f) for f in other):
-                values['state'] = 'ini_sent'
-            with Transaction().set_context(_log=True):
-                self.__class__.write([self], values)
+            succeeded(self, result)
+        else:
+            self._check_bank_keys_update(result)
         return result, error
+
+    def _write_internal(self, values):
+        "Change of the server code, logged in ir.model.log"
+        with without_check_access(), \
+                Transaction().set_context(_log=True):
+            self.__class__.write([self], values)
+
+    @staticmethod
+    def _technical_code(result):
+        if result is not None and result.technical is not None:
+            return result.technical.code
+
+    def _check_bank_keys_update(self, result):
+        """Common block for 091008 EBICS_BANK_PUBKEY_UPDATE_REQUIRED (working
+        paper E07 ch. 4.4, F7; used by the orders from E08): the confirmed
+        bank keys are no longer valid, state bank_keys_received; the log is
+        written by the order frame, the message by _raise_order_error.
+        Return True if the code was 091008."""
+        if self._technical_code(result) != '091008':
+            return False
+        if self.state in CONFIRMED_STATES:
+            self._write_internal(self._fall_back_values())
+        return True
+
+    def _fall_back_values(self):
+        """Back to bank_keys_received from a state with confirmed bank keys;
+        a suspended connection stays suspended after the confirmation
+        (F9, variant A)"""
+        return {
+            'state': 'bank_keys_received',
+            'confirmed_state': self.state,
+            }
+
+    @property
+    def state_after_confirmation(self):
+        "suspended if the connection was suspended before (F9), else active"
+        return 'suspended' if self.confirmed_state == 'suspended' \
+            else 'active'
 
     @staticmethod
     def _log_values(result, error):
@@ -576,6 +772,19 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
                     error=str(error)))
         if result.ok:
             return
+        technical = self._technical_code(result)
+        if technical == '091008':
+            raise UserError(gettext(
+                    'account_ebics.msg_bank_keys_update_required',
+                    configuration=self.rec_name, order_type=order_type))
+        if order_type == 'HPB' and technical == '091002':
+            raise UserError(gettext(
+                    'account_ebics.msg_hpb_not_released',
+                    configuration=self.rec_name))
+        if technical == '091004':
+            raise UserError(gettext(
+                    'account_ebics.msg_participant_suspended',
+                    configuration=self.rec_name, order_type=order_type))
         code, text = result.technical, result.report_text
         if (code is None
                 or code.klass in {returncodes.OK, returncodes.INFO}):
@@ -594,6 +803,110 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
                 code=code.code if code else '-',
                 symbol=(code.symbol if code else None) or '',
                 text=text or (code.text if code else '')))
+
+    # Bank keys (working paper E07)
+
+    @classmethod
+    @ModelView.button
+    def fetch_bank_keys(cls, configurations):
+        "HPB (specification ch. 6.2 step 4)"
+        for configuration in configurations:
+            configuration._fetch_bank_keys()
+
+    @classmethod
+    @ModelView.button_action(
+        'account_ebics.wizard_configuration_confirm_bank_keys')
+    def confirm_bank_keys(cls, configurations):
+        pass
+
+    @classmethod
+    @ModelView.button
+    def suspend(cls, configurations):
+        "No downloads any more; no message to the bank (F4)"
+        for configuration in configurations:
+            cls._lock_order(configuration)
+            if configuration.state == 'active':
+                configuration._write_internal({'state': 'suspended'})
+
+    @classmethod
+    @ModelView.button
+    def reactivate(cls, configurations):
+        "Back to active, only with confirmed bank keys (F4)"
+        for configuration in configurations:
+            cls._lock_order(configuration)
+            if configuration.state != 'suspended':
+                continue
+            if not configuration._has_bank_keys():
+                raise UserError(gettext(
+                        'account_ebics.msg_reactivate_no_bank_keys',
+                        configuration=configuration.rec_name))
+            configuration._write_internal({'state': 'active'})
+
+    def _has_bank_keys(self):
+        with without_check_access():
+            data = self.__class__(self.id).bank_keys_data
+        return bool(data and self.bank_x002_hash and self.bank_e002_hash)
+
+    def bank_keys(self):
+        """The confirmed bank keys {purpose: certificate} for the orders
+        from E08; the stored hash values must match"""
+        with without_check_access():
+            data = self.__class__(self.id).bank_keys_data
+        try:
+            if not data or self.state not in CONFIRMED_STATES:
+                raise ValueError("No confirmed bank keys")
+            result = load_bank_keys(data)
+            for purpose in BANK_PURPOSES:
+                if (keys.certificate_hash(result[purpose])
+                        != getattr(self, 'bank_%s_hash' % purpose.lower())):
+                    raise ValueError("Hash value of %s" % purpose)
+        except (ValueError, KeyError, zipfile.BadZipFile):
+            raise UserError(gettext(
+                    'account_ebics.msg_bank_keys_missing',
+                    configuration=self.rec_name)) from None
+        return result
+
+    def _fetch_bank_keys(self):
+        "HPB in the order frame; the result as notification"
+        def allowed(configuration):
+            return configuration.state in HPB_STATES
+
+        def succeeded(configuration, result):
+            bank_keys = result.data['bank_keys']
+            hashes = {p: bank_keys[p]['hash'] for p in BANK_PURPOSES}
+            old = {p: getattr(configuration, 'bank_%s_hash' % p.lower())
+                for p in BANK_PURPOSES}
+            if configuration.state in CONFIRMED_STATES:
+                if hashes == old:
+                    # F6: unchanged, the state stays
+                    configuration._notify(
+                        'msg_bank_keys_unchanged', 'tryton-info')
+                    return
+                message, icon = 'msg_bank_keys_changed', 'tryton-warning'
+            else:
+                message, icon = 'msg_bank_keys_received', 'tryton-info'
+            values = {
+                'bank_keys_data': bank_keys_zip(
+                    bank_keys, configuration.host_id),
+                'bank_x002_hash': hashes['X002'],
+                'bank_e002_hash': hashes['E002'],
+                'state': 'bank_keys_received',
+                }
+            if configuration.state in CONFIRMED_STATES:
+                # remember active or suspended (F9); from ini_sent or
+                # bank_keys_received the remembered value stays
+                values.update(configuration._fall_back_values())
+            configuration._write_internal(values)
+            configuration._notify(message, icon)
+        self._run_order(
+            'HPB', lambda ebics: ebics.hpb(), allowed, succeeded)
+
+    def _notify(self, message, icon):
+        "Notification of the user who started the order"
+        # notify_user is a dualmethod: call it on the class
+        self.__class__.notify_user(
+            [self], icon, gettext(
+                'account_ebics.' + message, configuration=self.rec_name))
 
     def reset_to_draft(self):
         """Delete keys, hash values, flags and bank keys; the log stays
@@ -628,6 +941,7 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
         default.setdefault('ini_sent', False)
         default.setdefault('hia_sent', False)
         default.setdefault('state', 'draft')
+        default.setdefault('confirmed_state', None)
         default.setdefault('accounts', None)
         default.setdefault('logs', None)
         return super().copy(configurations, default=default)
@@ -716,3 +1030,131 @@ class ConfigurationResetDraft(Wizard):
                     'account_ebics.msg_reset_not_confirmed',
                     configuration='-'))
         return Configuration(context['active_id'])
+
+
+class ConfigurationConfirmBankKeysStart(ModelView):
+    __name__ = 'account.ebics.configuration.confirm_bank_keys.start'
+    __string__ = "Confirm Bank Keys"
+
+    bank = fields.Char("Bank", readonly=True)
+    host_id = fields.Char("Host ID", readonly=True)
+    x002_hash = fields.Char("X002 Hash", readonly=True)
+    e002_hash = fields.Char("E002 Hash", readonly=True)
+    x002_hash_groups = fields.Text("Bank X002 Hash", readonly=True)
+    e002_hash_groups = fields.Text("Bank E002 Hash", readonly=True)
+    x002_expected_groups = fields.Text(
+        "Expected Bank X002 Hash", readonly=True)
+    e002_expected_groups = fields.Text(
+        "Expected Bank E002 Hash", readonly=True)
+    x002_check = fields.Selection(
+        HASH_CHECKS, "X002 Comparison", readonly=True)
+    e002_check = fields.Selection(
+        HASH_CHECKS, "E002 Comparison", readonly=True)
+    check = fields.Selection(HASH_CHECKS, "Result", readonly=True)
+    stays_suspended = fields.Boolean(
+        "Stays Suspended", readonly=True,
+        help="The connection was suspended before; after the confirmation "
+        "it stays suspended until it is reactivated.")
+    compared = fields.Boolean(
+        "I compared the hash values with the information of the bank",
+        states={
+            'invisible': Eval('check') != 'no_expected',
+            })
+
+    @classmethod
+    def view_attributes(cls):
+        return super().view_attributes() + [
+            ('//label[@id="stays_suspended_note"]', 'states', {
+                    'invisible': ~Eval('stays_suspended', False),
+                    }),
+            ]
+
+
+class ConfigurationConfirmBankKeys(Wizard):
+    "Dialog to confirm the bank keys (working paper E07 ch. 4.3)"
+    __name__ = 'account.ebics.configuration.confirm_bank_keys'
+
+    start = StateView(
+        'account.ebics.configuration.confirm_bank_keys.start',
+        'account_ebics.configuration_confirm_bank_keys_start_view_form', [
+            Button("Cancel", 'end', 'tryton-cancel'),
+            Button("Confirm", 'confirm', 'tryton-ok', default=True,
+                states={
+                    'readonly': ((Eval('check') == 'mismatch')
+                        | ((Eval('check') == 'no_expected')
+                            & ~Eval('compared', False))),
+                    }),
+            ])
+    confirm = StateTransition()
+
+    def _configuration(self):
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        context = Transaction().context
+        if (context.get('active_model') != Configuration.__name__
+                or context.get('active_id') is None):
+            raise UserError(gettext(
+                    'account_ebics.msg_bank_keys_wrong_state',
+                    configuration='-'))
+        return Configuration(context['active_id'])
+
+    def default_start(self, fields):
+        configuration = self._configuration()
+        checks = [configuration.bank_x002_hash_check,
+            configuration.bank_e002_hash_check]
+        bank = configuration.bank
+        return {
+            'bank': ' '.join(filter(None, [
+                        bank.rec_name if bank else None,
+                        bank.bic if bank else None])),
+            'host_id': configuration.host_id,
+            'x002_hash': configuration.bank_x002_hash,
+            'e002_hash': configuration.bank_e002_hash,
+            'x002_hash_groups': configuration.bank_x002_hash_groups,
+            'e002_hash_groups': configuration.bank_e002_hash_groups,
+            'x002_expected_groups': (
+                configuration.bank_x002_hash_expected_groups),
+            'e002_expected_groups': (
+                configuration.bank_e002_hash_expected_groups),
+            'x002_check': checks[0],
+            'e002_check': checks[1],
+            'check': overall_check(checks),
+            'compared': False,
+            'stays_suspended': (
+                configuration.state_after_confirmation == 'suspended'),
+            }
+
+    def transition_confirm(self):
+        "The server checks again (F1, F3); state active with _log"
+        pool = Pool()
+        ModelAccess = pool.get('ir.model.access')
+        ModelAccess.check('account.ebics.configuration', 'write')
+        configuration = self._configuration()
+        configuration._lock_order(configuration)
+        if configuration.state != 'bank_keys_received':
+            raise UserError(gettext(
+                    'account_ebics.msg_bank_keys_wrong_state',
+                    configuration=configuration.rec_name))
+        # the keys shown must still be the stored ones
+        if (self.start.x002_hash != configuration.bank_x002_hash
+                or self.start.e002_hash != configuration.bank_e002_hash
+                or not configuration._has_bank_keys()):
+            raise UserError(gettext(
+                    'account_ebics.msg_bank_keys_changed_meanwhile',
+                    configuration=configuration.rec_name))
+        check = overall_check([configuration.bank_x002_hash_check,
+                configuration.bank_e002_hash_check])
+        if check == 'mismatch':
+            raise UserError(gettext(
+                    'account_ebics.msg_bank_keys_mismatch',
+                    configuration=configuration.rec_name))
+        if check != 'match' and not self.start.compared:
+            raise UserError(gettext(
+                    'account_ebics.msg_bank_keys_not_compared',
+                    configuration=configuration.rec_name))
+        # back to suspended if it was suspended before (F9)
+        configuration._write_internal({
+                'state': configuration.state_after_confirmation,
+                'confirmed_state': None,
+                })
+        return 'end'

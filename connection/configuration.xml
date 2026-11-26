@@ -183,6 +183,60 @@ copyright notices and license terms. -->
             <field name="group" ref="group_ebics_admin"/>
         </record>
 
+        <!-- Buttons of the bank keys (working paper E07 ch. 4.1) -->
+        <record model="ir.model.button" id="configuration_fetch_bank_keys_button">
+            <field name="model">account.ebics.configuration</field>
+            <field name="name">fetch_bank_keys</field>
+            <field name="string">Fetch Bank Keys</field>
+        </record>
+        <record model="ir.model.button-res.group" id="configuration_fetch_bank_keys_button_group_ebics_admin">
+            <field name="button" ref="configuration_fetch_bank_keys_button"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+        <record model="ir.model.button" id="configuration_confirm_bank_keys_button">
+            <field name="model">account.ebics.configuration</field>
+            <field name="name">confirm_bank_keys</field>
+            <field name="string">Confirm Bank Keys</field>
+        </record>
+        <record model="ir.model.button-res.group" id="configuration_confirm_bank_keys_button_group_ebics_admin">
+            <field name="button" ref="configuration_confirm_bank_keys_button"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+        <record model="ir.model.button" id="configuration_suspend_button">
+            <field name="model">account.ebics.configuration</field>
+            <field name="name">suspend</field>
+            <field name="string">Suspend</field>
+        </record>
+        <record model="ir.model.button-res.group" id="configuration_suspend_button_group_ebics_admin">
+            <field name="button" ref="configuration_suspend_button"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+        <record model="ir.model.button" id="configuration_reactivate_button">
+            <field name="model">account.ebics.configuration</field>
+            <field name="name">reactivate</field>
+            <field name="string">Reactivate</field>
+        </record>
+        <record model="ir.model.button-res.group" id="configuration_reactivate_button_group_ebics_admin">
+            <field name="button" ref="configuration_reactivate_button"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+
+        <!-- Dialog "Confirm Bank Keys" (working paper E07 ch. 4.3) -->
+        <record model="ir.ui.view" id="configuration_confirm_bank_keys_start_view_form">
+            <field name="model">account.ebics.configuration.confirm_bank_keys.start</field>
+            <field name="type">form</field>
+            <field name="name">connection/configuration_confirm_bank_keys_start_form</field>
+        </record>
+        <record model="ir.action.wizard" id="wizard_configuration_confirm_bank_keys">
+            <field name="name">Confirm Bank Keys</field>
+            <field name="wiz_name">account.ebics.configuration.confirm_bank_keys</field>
+            <field name="model">account.ebics.configuration</field>
+        </record>
+        <record model="ir.action-res.group" id="wizard_configuration_confirm_bank_keys_group_ebics_admin">
+            <field name="action" ref="wizard_configuration_confirm_bank_keys"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+
         <record model="ir.rule.group" id="rule_group_configuration_companies">
             <field name="name">User in companies</field>
             <field name="model">account.ebics.configuration</field>

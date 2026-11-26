@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form col="4">
+    <image name="tryton-info" xexpand="0" xfill="0"/>
+    <group col="1" colspan="3" id="explanation" xexpand="1">
+        <label string="The hash values must match the information of the bank (letter, online banking, initialisation letter of the bank)." id="explanation_compare" xalign="0.0"/>
+        <label string="Only after the confirmation, orders are signed and encrypted with these keys." id="explanation_orders" xalign="0.0"/>
+    </group>
+    <label name="bank"/>
+    <field name="bank"/>
+    <label name="host_id"/>
+    <field name="host_id"/>
+    <separator name="x002_hash_groups" colspan="2"/>
+    <separator name="x002_expected_groups" colspan="2"/>
+    <field name="x002_hash_groups" colspan="2" height="60"/>
+    <field name="x002_expected_groups" colspan="2" height="60"/>
+    <label name="x002_check"/>
+    <field name="x002_check" colspan="3"/>
+    <separator name="e002_hash_groups" colspan="2"/>
+    <separator name="e002_expected_groups" colspan="2"/>
+    <field name="e002_hash_groups" colspan="2" height="60"/>
+    <field name="e002_expected_groups" colspan="2" height="60"/>
+    <label name="e002_check"/>
+    <field name="e002_check" colspan="3"/>
+    <label name="check"/>
+    <field name="check" colspan="3"/>
+    <label string="The connection was suspended before: after the confirmation it stays suspended. Use &quot;Reactivate&quot; to activate it." id="stays_suspended_note" colspan="4" xalign="0.0"/>
+    <field name="compared" colspan="4"/>
+    <field name="stays_suspended" invisible="1"/>
+    <field name="x002_hash" invisible="1"/>
+    <field name="e002_hash" invisible="1"/>
+</form>

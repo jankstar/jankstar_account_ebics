@@ -1348,6 +1348,43 @@ def cmd_reset(args, store, out):
     return 0
 
 
+def rotate_bank_keys(store, bits=BANK_BITS):
+    """New bank keys X002 and E002 (A006 stays): keyring and bank.json are
+    updated under the lock, HPB then delivers the new hash values (working
+    paper E07 ch. 4.5, F5). Return {purpose: (old hash, new hash)}."""
+    with store.lock():
+        store.ensure()
+        bank = store.bank()
+        old = bank.keyring
+        entries = dict(old.keys)
+        for purpose in ['X002', 'E002']:
+            private_key = keys.generate_key(bits)
+            entries[purpose] = keys.KeyEntry(
+                keys.SOURCE_GENERATED, private_key,
+                keys.create_certificate(private_key, purpose, BANK_SUBJECT))
+        before = {p: bank.bank_hash(p) for p in ['X002', 'E002']}
+        bank.keyring = keys.Keyring(old.bits, entries)
+        path = store.path(KEYRING)
+        with open(path + '.tmp', 'wb') as f:
+            f.write(keys.dump_keyring(bank.keyring, PASSPHRASE))
+        os.replace(path + '.tmp', path)
+        # bank.json holds the hash values of the new keyring
+        store.save_state(bank.to_state())
+        return {p: (before[p], bank.bank_hash(p)) for p in before}
+
+
+def cmd_rotate_bank_keys(args, store, out):
+    changes = rotate_bank_keys(store)
+    print("Neue Bankschlüssel (Hashwerte SHA-256 für „Bankschlüssel "
+        "bestätigen“):", file=out)
+    for purpose, (old, new) in sorted(changes.items(), reverse=True):
+        print("  %s  %s" % (purpose, new), file=out)
+        print("        bisher %s" % old, file=out)
+    print("In Tryton: Bankschlüssel abrufen (HPB) und erneut bestätigen.",
+        file=out)
+    return 0
+
+
 def _date(value):
     return datetime.date.fromisoformat(value)
 
@@ -1426,6 +1463,11 @@ def parser(parser_class=argparse.ArgumentParser, state_dir=None):
     command.add_argument('--negative', action='store_true',
         help="negative Quittung (Dateien bleiben bereitgestellt)")
     command.set_defaults(func=cmd_demo)
+
+    command = commands.add_parser(
+        'rotate-bank-keys', parents=[common],
+        help="neue Bankschlüssel X002/E002 (HPB liefert neue Hashwerte)")
+    command.set_defaults(func=cmd_rotate_bank_keys)
 
     command = commands.add_parser(
         'reset', parents=[common], help="Zustand löschen (TLS bleibt)")

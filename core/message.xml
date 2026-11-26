@@ -100,5 +100,43 @@ copyright notices and license terms. -->
         <record model="ir.message" id="msg_letter_not_sent">
             <field name="text">The initialisation letter %(order_type)s of EBICS connection "%(configuration)s" can only be printed after the bank accepted %(order_type)s.</field>
         </record>
+
+        <!-- Bank keys HPB, confirmation, suspend (working paper E07) -->
+        <record model="ir.message" id="msg_hpb_not_released">
+            <field name="text">EBICS connection "%(configuration)s" is not yet released by the bank (091002 EBICS_INVALID_USER_OR_USER_STATE). Send the signed initialisation letters to the bank and try again after the release.</field>
+        </record>
+        <record model="ir.message" id="msg_participant_suspended">
+            <field name="text">The bank refused %(order_type)s of EBICS connection "%(configuration)s": the participant is locked at the bank (091004 EBICS_INVALID_USER_STATE).</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_received">
+            <field name="text">The bank keys of EBICS connection "%(configuration)s" were received. Compare the hash values with the information of the bank and confirm them.</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_changed">
+            <field name="text">The bank keys of EBICS connection "%(configuration)s" have changed. Compare the new hash values with the information of the bank and confirm them; until then no orders are possible.</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_unchanged">
+            <field name="text">The bank keys of EBICS connection "%(configuration)s" are unchanged.</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_update_required">
+            <field name="text">The bank has new keys for EBICS connection "%(configuration)s" (%(order_type)s: 091008 EBICS_BANK_PUBKEY_UPDATE_REQUIRED). Fetch the bank keys (HPB) and confirm them.</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_mismatch">
+            <field name="text">The hash values of the bank keys of EBICS connection "%(configuration)s" differ from the expected values. Check the information of the bank and fetch the bank keys again.</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_not_compared">
+            <field name="text">Please confirm that you compared the hash values of the bank keys of EBICS connection "%(configuration)s" with the information of the bank.</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_changed_meanwhile">
+            <field name="text">The bank keys of EBICS connection "%(configuration)s" have changed in the meantime. Please open the dialog again.</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_wrong_state">
+            <field name="text">The bank keys of EBICS connection "%(configuration)s" can only be confirmed in the state "Bank Keys Received".</field>
+        </record>
+        <record model="ir.message" id="msg_bank_keys_missing">
+            <field name="text">EBICS connection "%(configuration)s" has no confirmed bank keys.</field>
+        </record>
+        <record model="ir.message" id="msg_reactivate_no_bank_keys">
+            <field name="text">EBICS connection "%(configuration)s" cannot be reactivated without confirmed bank keys.</field>
+        </record>
     </data>
 </tryton>

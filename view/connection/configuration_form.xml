@@ -49,14 +49,24 @@ copyright notices and license terms. -->
             <label name="user_e002_hash"/>
             <field name="user_e002_hash" colspan="3"/>
             <separator string="Bank Certificates" colspan="4" id="bank_keys"/>
-            <label name="bank_x002_hash"/>
-            <field name="bank_x002_hash" colspan="3"/>
             <label name="bank_x002_hash_expected"/>
             <field name="bank_x002_hash_expected" colspan="3"/>
-            <label name="bank_e002_hash"/>
-            <field name="bank_e002_hash" colspan="3"/>
             <label name="bank_e002_hash_expected"/>
             <field name="bank_e002_hash_expected" colspan="3"/>
+            <group col="4" colspan="4" id="bank_hashes">
+                <separator name="bank_x002_hash_groups" colspan="2"/>
+                <separator name="bank_x002_hash_expected_groups" colspan="2"/>
+                <field name="bank_x002_hash_groups" colspan="2" height="60" widget="text"/>
+                <field name="bank_x002_hash_expected_groups" colspan="2" height="60" widget="text"/>
+                <label name="bank_x002_hash_check"/>
+                <field name="bank_x002_hash_check" colspan="3"/>
+                <separator name="bank_e002_hash_groups" colspan="2"/>
+                <separator name="bank_e002_hash_expected_groups" colspan="2"/>
+                <field name="bank_e002_hash_groups" colspan="2" height="60" widget="text"/>
+                <field name="bank_e002_hash_expected_groups" colspan="2" height="60" widget="text"/>
+                <label name="bank_e002_hash_check"/>
+                <field name="bank_e002_hash_check" colspan="3"/>
+            </group>
         </page>
         <page name="logs">
             <field name="logs" colspan="4"/>
@@ -69,5 +79,9 @@ copyright notices and license terms. -->
         <button name="generate_keys" icon="tryton-launch"/>
         <button name="send_ini" icon="tryton-forward"/>
         <button name="send_hia" icon="tryton-forward"/>
+        <button name="suspend" icon="tryton-cancel"/>
+        <button name="reactivate" icon="tryton-refresh"/>
+        <button name="fetch_bank_keys" icon="tryton-download"/>
+        <button name="confirm_bank_keys" icon="tryton-ok"/>
     </group>
 </form>

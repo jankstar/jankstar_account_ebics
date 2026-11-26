@@ -5,6 +5,7 @@ import contextlib
 import datetime
 import hashlib
 import io
+import json
 import math
 import threading
 import unittest
@@ -20,7 +21,9 @@ from trytond import backend, config
 from trytond.exceptions import UserError
 from trytond.model.exceptions import AccessButtonError, AccessError
 from trytond.modules.account.tests import create_chart
-from trytond.modules.account_ebics.protocol import keys
+from trytond.modules.account_ebics.connection import \
+    configuration as configuration_module
+from trytond.modules.account_ebics.protocol import client, keys, returncodes
 from trytond.modules.account_ebics.protocol.exceptions import (
     EbicsTransportError)
 from trytond.modules.account_ebics.tests import camt_generator, fake_bank
@@ -1863,7 +1866,9 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
         admin_group = ModelData.get_id('account_ebics', 'group_ebics_admin')
         company, configuration = self.new_connection()
         names = ['generate_keys', 'send_ini', 'send_hia', 'reset_draft',
-            'print_ini_letter', 'print_hia_letter']
+            'print_ini_letter', 'print_hia_letter',
+            # E07
+            'fetch_bank_keys', 'confirm_bank_keys', 'suspend', 'reactivate']
         self.assertEqual(sorted(names), sorted(
                 b.name for b in Button.search([
                         ('model', '=', 'account.ebics.configuration')])))
@@ -1908,6 +1913,496 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
                     Configuration.read([configuration.id], [name])
         self.assertEqual(self.read(configuration, 'state'),
             ('keys_generated',))
+
+    # E07: bank keys (HPB), confirmation, suspend
+
+    def initialised(self, bank, user_id='TESTUSER', **values):
+        """Connection after INI and HIA at the simulated bank (state
+        ini_sent), committed"""
+        Configuration = Pool().get('account.ebics.configuration')
+        _, configuration = self.new_connection(user_id=user_id, **values)
+        self.generated(configuration)
+        commit()
+        with self.bank_connection(OrderTransport(bank)):
+            Configuration.send_ini([configuration])
+            Configuration.send_hia([configuration])
+        commit()
+        return Configuration(configuration.id)
+
+    def fetch(self, configuration, bank):
+        Configuration = Pool().get('account.ebics.configuration')
+        with self.bank_connection(OrderTransport(bank)):
+            Configuration.fetch_bank_keys([configuration])
+        commit()
+
+    def confirm_wizard(self, configuration):
+        ConfirmBankKeys = Pool().get(
+            'account.ebics.configuration.confirm_bank_keys', type='wizard')
+        context = Transaction().set_context(
+            active_model='account.ebics.configuration',
+            active_id=configuration.id, active_ids=[configuration.id])
+        with context:
+            session_id, _, _ = ConfirmBankKeys.create()
+            wizard = ConfirmBankKeys(session_id)
+            values = wizard.default_start(None)
+            for name, value in values.items():
+                setattr(wizard.start, name, value)
+        return wizard, values
+
+    def run_confirm(self, configuration, wizard):
+        with Transaction().set_context(
+                active_model='account.ebics.configuration',
+                active_id=configuration.id, active_ids=[configuration.id]):
+            return wizard.transition_confirm()
+
+    def active(self, bank, **values):
+        "Connection with confirmed bank keys (state active)"
+        configuration = self.initialised(bank, **values)
+        self.fetch(configuration, bank)
+        wizard, _ = self.confirm_wizard(configuration)
+        wizard.start.compared = True
+        self.run_confirm(configuration, wizard)
+        commit()
+        return Pool().get('account.ebics.configuration')(configuration.id)
+
+    def notifications(self, configuration):
+        Notification = Pool().get('res.notification')
+        return [n.label for n in Notification.search([
+                    ('model', '=', 'account.ebics.configuration'),
+                    ('records', '=', '[%s]' % configuration.id),
+                    ], order=[('id', 'ASC')])]
+
+    # E07 T1
+    @with_transaction()
+    def test_hpb_not_released(self):
+        "HPB before the release: 091002, state stays ini_sent, log"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(
+            keyring=cached_bank_keyring(), auto_release=False)
+        configuration = self.initialised(bank)
+        self.assertEqual(self.read(configuration, 'state'), ('ini_sent',))
+        with self.bank_connection(OrderTransport(bank)):
+            self.assertUserError(
+                lambda: Configuration.fetch_bank_keys([configuration]),
+                'is not yet released by the bank')
+        Transaction().rollback()
+        self.assertEqual(self.read(configuration, 'state', 'bank_x002_hash'),
+            ('ini_sent', None))
+        log = self.logs(configuration)[-1]
+        self.assertEqual(
+            (log.order_type, log.state, log.technical_return_code),
+            ('HPB', 'error', '091002'))
+        # locked at the bank: 091004
+        participant = bank.participants[('TESTPARTNER', 'TESTUSER')]
+        participant.state = fake_bank.SUSPENDED
+        with self.bank_connection(OrderTransport(bank)):
+            self.assertUserError(
+                lambda: Configuration.fetch_bank_keys([configuration]),
+                'locked at the bank (091004')
+        Transaction().rollback()
+        self.assertEqual(self.read(configuration, 'state'), ('ini_sent',))
+
+    # E07 T2
+    @with_transaction()
+    def test_hpb(self):
+        "HPB after the release: bank_keys_received, container, hash values"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.initialised(bank)
+        self.fetch(configuration, bank)
+        configuration = Configuration(configuration.id)
+        self.assertEqual(configuration.state, 'bank_keys_received')
+        self.assertEqual(configuration.bank_x002_hash, bank.bank_hash('X002'))
+        self.assertEqual(configuration.bank_e002_hash, bank.bank_hash('E002'))
+        with without_check_access():
+            data = Configuration(configuration.id).bank_keys_data
+        with zipfile.ZipFile(io.BytesIO(bytes(data))) as container:
+            self.assertEqual(sorted(container.namelist()),
+                ['E002.pem', 'X002.pem', 'manifest.json'])
+            manifest = json.loads(container.read('manifest.json'))
+            pem = container.read('X002.pem')
+        self.assertEqual(manifest['version'], 1)
+        self.assertEqual(manifest['host_id'], 'TESTHOST')
+        self.assertTrue(manifest['received'])
+        self.assertEqual(manifest['keys'], {
+                p: {'version': p, 'hash': bank.bank_hash(p)}
+                for p in ['X002', 'E002']})
+        self.assertEqual(pem, bank.certificate('X002').public_bytes(
+                serialization.Encoding.PEM))
+        self.assertNotIn(b'PRIVATE', bytes(data))
+        certificates = configuration_module.load_bank_keys(data)
+        self.assertEqual(
+            keys.certificate_hash(certificates['E002']),
+            bank.bank_hash('E002'))
+        # the confirmed keys only from active
+        self.assertUserError(configuration.bank_keys, 'no confirmed bank')
+        # display in groups of two (F8), no expected values yet
+        lines = configuration.bank_x002_hash_groups.split('\n')
+        self.assertEqual(len(lines), 2)
+        self.assertRegex(lines[0], r'^([0-9A-F]{2} ){15}[0-9A-F]{2}$')
+        self.assertEqual(lines[0].replace(' ', '') + lines[1].replace(
+                ' ', ''), bank.bank_hash('X002'))
+        self.assertEqual(configuration.bank_x002_hash_check, 'no_expected')
+        self.assertIsNone(configuration.bank_x002_hash_expected_groups)
+        log = self.logs(configuration)[-1]
+        self.assertEqual((log.order_type, log.state), ('HPB', 'done'))
+        members = payload_members(log.payload)
+        self.assertEqual(sorted(members), ['request.xml', 'response.xml'])
+        for value in members.values():
+            self.assertNotIn(b'PRIVATE KEY', value)
+            self.assertNotIn(TEST_PASSPHRASE.encode(), value)
+        self.assertEqual(len(self.notifications(configuration)), 1)
+        self.assertIn('were received', self.notifications(configuration)[0])
+
+    # E07 T3
+    @with_transaction()
+    def test_confirm_bank_keys(self):
+        "Confirmation: equal, different, without expected values"
+        Configuration = Pool().get('account.ebics.configuration')
+        ConfirmBankKeys = Pool().get(
+            'account.ebics.configuration.confirm_bank_keys', type='wizard')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        x002, e002 = bank.bank_hash('X002'), bank.bank_hash('E002')
+
+        def spaced(value):
+            # as printed by a bank: groups, lower case
+            return ' '.join(value[i:i + 2] for i in range(0, 64, 2)).lower()
+
+        # the button is readonly for mismatch and without the tick
+        button = dict(
+            (b.state, b) for b in ConfirmBankKeys.start.buttons)['confirm']
+        self.assertEqual(button.states['readonly'].pyson(), (
+                (Eval('check') == 'mismatch')
+                | ((Eval('check') == 'no_expected')
+                    & ~Eval('compared', False))).pyson())
+
+        # expected values equal: without tick
+        equal = self.initialised(bank, user_id='EQUAL',
+            bank_x002_hash_expected=spaced(x002),
+            bank_e002_hash_expected=spaced(e002))
+        self.fetch(equal, bank)
+        wizard, values = self.confirm_wizard(equal)
+        self.assertEqual(values['check'], 'match')
+        self.assertEqual(values['x002_check'], 'match')
+        self.assertEqual(values['host_id'], 'TESTHOST')
+        self.assertEqual(values['x002_hash_groups'],
+            '\n'.join(configuration_module.format_hash(x002)))
+        self.assertEqual(values['x002_expected_groups'],
+            values['x002_hash_groups'])
+        self.assertEqual(self.run_confirm(equal, wizard), 'end')
+        self.assertEqual(self.read(equal, 'state'), ('active',))
+        self.assertEqual(Configuration(equal.id).bank_keys()['X002']
+            .public_bytes(serialization.Encoding.DER),
+            bank.certificate('X002').public_bytes(
+                serialization.Encoding.DER))
+
+        # expected values different: not confirmable
+        different = self.initialised(bank, user_id='DIFFERENT',
+            bank_x002_hash_expected=x002, bank_e002_hash_expected=TEST_HASH)
+        self.fetch(different, bank)
+        wizard, values = self.confirm_wizard(different)
+        self.assertEqual(
+            (values['x002_check'], values['e002_check'], values['check']),
+            ('match', 'mismatch', 'mismatch'))
+        wizard.start.compared = True
+        self.assertUserError(
+            lambda: self.run_confirm(different, wizard),
+            'differ from the expected values')
+        self.assertEqual(self.read(different, 'state'),
+            ('bank_keys_received',))
+
+        # without expected values: the tick is needed
+        without = self.initialised(bank, user_id='WITHOUT')
+        self.fetch(without, bank)
+        wizard, values = self.confirm_wizard(without)
+        self.assertEqual(values['check'], 'no_expected')
+        self.assertFalse(values['compared'])
+        self.assertUserError(
+            lambda: self.run_confirm(without, wizard),
+            'Please confirm that you compared')
+        # one expected value only: the tick is still needed
+        Configuration.write([Configuration(without.id)], {
+                'bank_x002_hash_expected': x002})
+        wizard, values = self.confirm_wizard(without)
+        self.assertEqual(values['check'], 'no_expected')
+        # keys changed since the dialog was opened
+        wizard.start.compared = True
+        wizard.start.e002_hash = TEST_HASH
+        self.assertUserError(
+            lambda: self.run_confirm(without, wizard),
+            'changed in the meantime')
+        wizard.start.e002_hash = e002
+        self.assertEqual(self.run_confirm(without, wizard), 'end')
+        self.assertEqual(self.read(without, 'state'), ('active',))
+        # again: not in the state bank_keys_received
+        self.assertUserError(
+            lambda: self.run_confirm(without, wizard),
+            'can only be confirmed')
+
+    # E07 T4
+    @with_transaction()
+    def test_bank_keys_changed(self):
+        "HPB in active: same keys stay active, new keys bank_keys_received"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        old = self.read(configuration, 'bank_x002_hash', 'bank_e002_hash')
+        self.fetch(configuration, bank)
+        self.assertEqual(self.read(configuration, 'state'), ('active',))
+        self.assertIn('are unchanged', self.notifications(configuration)[-1])
+        self.assertEqual([l.order_type for l in self.logs(configuration)],
+            ['INI', 'HIA', 'HPB', 'HPB'])
+
+        # new keys of the bank (as rotate-bank-keys of the test server)
+        bank.keyring = keys.generate_keyring(2048, fake_bank.BANK_SUBJECT)
+        self.fetch(configuration, bank)
+        configuration = Configuration(configuration.id)
+        self.assertEqual(configuration.state, 'bank_keys_received')
+        self.assertEqual(
+            (configuration.bank_x002_hash, configuration.bank_e002_hash),
+            (bank.bank_hash('X002'), bank.bank_hash('E002')))
+        self.assertNotEqual(
+            (configuration.bank_x002_hash, configuration.bank_e002_hash),
+            old)
+        self.assertIn('have changed', self.notifications(configuration)[-1])
+
+        # also from suspended
+        wizard, _ = self.confirm_wizard(configuration)
+        wizard.start.compared = True
+        self.run_confirm(configuration, wizard)
+        Configuration.suspend([configuration])
+        commit()
+        bank.keyring = cached_bank_keyring()
+        self.fetch(configuration, bank)
+        self.assertEqual(self.read(configuration, 'state', 'bank_x002_hash'),
+            ('bank_keys_received', old[0]))
+
+    # E07 T5
+    @with_transaction()
+    def test_suspend_reactivate(self):
+        "Suspend only from active, reactivate only with confirmed keys"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        Configuration.suspend([configuration])
+        self.assertEqual(self.read(configuration, 'state'), ('suspended',))
+        # HPB with the same keys in suspended: stays suspended (F4)
+        commit()
+        self.fetch(configuration, bank)
+        self.assertEqual(self.read(configuration, 'state'), ('suspended',))
+        Configuration.reactivate([configuration])
+        self.assertEqual(self.read(configuration, 'state'), ('active',))
+        self.assertTrue(Configuration(configuration.id).bank_keys())
+
+        # without the stored bank keys: refused
+        Configuration.suspend([configuration])
+        with without_check_access():
+            Configuration.write([configuration], {'bank_keys_data': None})
+        self.assertUserError(
+            lambda: Configuration.reactivate([configuration]),
+            'cannot be reactivated without confirmed bank keys')
+
+        # only in the fitting states (checked by the button)
+        company = configuration.company
+        admin = create_user('ebics_admin_e07_t5', company,
+            ['group_ebics_admin'])
+        with set_company(company):
+            draft, = Configuration.create([configuration_values(
+                        company, user_id='DRAFTUSER')])
+        set_user, set_context = as_user(admin)
+        with set_user, set_context:
+            for name in ['suspend', 'reactivate', 'fetch_bank_keys',
+                    'confirm_bank_keys']:
+                with self.subTest(button=name):
+                    with self.assertRaises(AccessButtonError):
+                        getattr(Configuration, name)(
+                            [Configuration(draft.id)])
+
+    # E07 T6
+    @with_transaction()
+    def test_bank_keys_update_required(self):
+        "091008: state bank_keys_received, log, message (block for E08)"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        # the simulated bank answers HPB with 091008 (fault)
+        bank.faults['HPB'] = '091008'
+        with self.bank_connection(OrderTransport(bank)):
+            self.assertUserError(
+                lambda: Configuration.fetch_bank_keys([configuration]),
+                'Fetch the bank keys (HPB) and confirm them')
+        Transaction().rollback()
+        self.assertEqual(self.read(configuration, 'state'),
+            ('bank_keys_received',))
+        log = self.logs(configuration)[-1]
+        self.assertEqual(
+            (log.order_type, log.state, log.technical_return_code),
+            ('HPB', 'error', '091008'))
+
+        # the block itself, as the orders of E08 will use it
+        result = client.OrderResult(
+            'BTD', technical=returncodes.lookup('091008'))
+        configuration = Configuration(configuration.id)
+        Configuration.write([configuration], {'state': 'active'})
+        self.assertTrue(configuration._check_bank_keys_update(result))
+        self.assertEqual(self.read(configuration, 'state'),
+            ('bank_keys_received',))
+        other = client.OrderResult(
+            'BTD', technical=returncodes.lookup('091002'))
+        self.assertFalse(configuration._check_bank_keys_update(other))
+        self.assertUserError(
+            lambda: configuration._raise_order_error('BTD', result, None),
+            '(BTD: 091008 EBICS_BANK_PUBKEY_UPDATE_REQUIRED)')
+
+    # E07 T7
+    @with_transaction()
+    def test_bank_keys_access(self):
+        "Buttons and dialog of E07 only for the EBICS administrator"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        Button = pool.get('ir.model.button')
+        ActionWizard = pool.get('ir.action.wizard')
+        ModelData = pool.get('ir.model.data')
+        admin_group = ModelData.get_id('account_ebics', 'group_ebics_admin')
+        for name in ['fetch_bank_keys', 'confirm_bank_keys', 'suspend',
+                'reactivate']:
+            with self.subTest(button=name):
+                self.assertEqual(
+                    Button.get_groups('account.ebics.configuration', name),
+                    {admin_group})
+        action, = ActionWizard.search([
+                ('wiz_name', '=',
+                    'account.ebics.configuration.confirm_bank_keys')])
+        self.assertEqual([g.id for g in action.groups], [admin_group])
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        user = create_user(
+            'ebics_user_e07', configuration.company, ['group_ebics'])
+        set_user, set_context = as_user(user)
+        with set_user, set_context, \
+                ebics_settings(passphrase=TEST_PASSPHRASE):
+            for name in ['fetch_bank_keys', 'suspend']:
+                with self.subTest(button=name, user='group_ebics'):
+                    with self.assertRaises(AccessButtonError):
+                        getattr(Configuration, name)(
+                            [Configuration(configuration.id)])
+            # the bank keys container has no field access either (D8)
+            with self.assertRaises(AccessError):
+                Configuration.read([configuration.id], ['bank_keys_data'])
+        self.assertEqual(self.read(configuration, 'state'), ('active',))
+
+    # E07.1 (F9): confirmation after suspend
+
+    def confirm(self, configuration, expect_suspended):
+        wizard, values = self.confirm_wizard(configuration)
+        self.assertEqual(values['stays_suspended'], expect_suspended)
+        wizard.start.compared = True
+        self.assertEqual(self.run_confirm(configuration, wizard), 'end')
+        commit()
+
+    @with_transaction()
+    def test_confirm_after_suspend(self):
+        "Suspended stays suspended after confirming new bank keys (F9)"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        self.assertIsNone(self.read(configuration, 'confirmed_state')[0])
+        Configuration.suspend([configuration])
+        commit()
+        # new keys of the bank (rotate-bank-keys)
+        bank.keyring = keys.generate_keyring(2048, fake_bank.BANK_SUBJECT)
+        self.fetch(configuration, bank)
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('bank_keys_received', 'suspended'))
+        # HPB again in bank_keys_received keeps the remembered state
+        self.fetch(configuration, bank)
+        self.assertEqual(self.read(configuration, 'confirmed_state'),
+            ('suspended',))
+        self.confirm(configuration, True)
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('suspended', None))
+        Configuration.reactivate([Configuration(configuration.id)])
+        commit()
+        self.assertEqual(self.read(configuration, 'state'), ('active',))
+
+        # from active: back to active as before
+        bank.keyring = cached_bank_keyring()
+        self.fetch(configuration, bank)
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('bank_keys_received', 'active'))
+        self.confirm(configuration, False)
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('active', None))
+
+    @with_transaction()
+    def test_bank_keys_update_required_suspended(self):
+        "091008 in suspended: stays suspended after the confirmation (F9)"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        Configuration.suspend([configuration])
+        commit()
+        bank.faults['HPB'] = '091008'
+        with self.bank_connection(OrderTransport(bank)):
+            self.assertUserError(
+                lambda: Configuration.fetch_bank_keys(
+                    [Configuration(configuration.id)]),
+                '091008 EBICS_BANK_PUBKEY_UPDATE_REQUIRED')
+        Transaction().rollback()
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('bank_keys_received', 'suspended'))
+        self.confirm(configuration, True)
+        self.assertEqual(self.read(configuration, 'state'), ('suspended',))
+
+        # the block itself from active: back to active
+        Configuration.reactivate([Configuration(configuration.id)])
+        result = client.OrderResult(
+            'BTD', technical=returncodes.lookup('091008'))
+        self.assertTrue(Configuration(configuration.id)
+            ._check_bank_keys_update(result))
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('bank_keys_received', 'active'))
+        commit()
+        self.confirm(configuration, False)
+        self.assertEqual(self.read(configuration, 'state'), ('active',))
+
+    @with_transaction()
+    def test_confirmed_state_reset_and_copy(self):
+        "Reset to draft and copy clear the remembered state"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        ResetDraft = pool.get(
+            'account.ebics.configuration.reset_draft', type='wizard')
+        Start = pool.get('account.ebics.configuration.confirm_bank_keys.start')
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        Configuration.write([configuration], {
+                'state': 'bank_keys_received',
+                'confirmed_state': 'suspended'})
+        copy, = Configuration.copy([configuration], {'user_id': 'COPYUSER'})
+        self.assertIsNone(copy.confirmed_state)
+        with Transaction().set_context(
+                active_model='account.ebics.configuration',
+                active_id=configuration.id, active_ids=[configuration.id]):
+            session_id, _, _ = ResetDraft.create()
+            wizard = ResetDraft(session_id)
+            wizard.start.confirm = True
+            wizard.transition_reset()
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('draft', None))
+        # the note of the dialog is shown only when it stays suspended
+        attributes = dict(
+            (x, s) for x, a, s in Start.view_attributes() if a == 'states')
+        self.assertEqual(
+            attributes['//label[@id="stays_suspended_note"]']['invisible']
+            .pyson(), (~Eval('stays_suspended', False)).pyson())
 
 
 del ModuleTestCase

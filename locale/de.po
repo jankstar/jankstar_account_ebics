@@ -50,9 +50,21 @@ msgctxt "field:account.ebics.configuration,bank_e002_hash:"
 msgid "Bank E002 Hash"
 msgstr "Hashwert Bank E002"
 
+msgctxt "field:account.ebics.configuration,bank_e002_hash_check:"
+msgid "E002 Comparison"
+msgstr "Vergleich E002"
+
 msgctxt "field:account.ebics.configuration,bank_e002_hash_expected:"
 msgid "Expected Bank E002 Hash"
 msgstr "Erwarteter Hashwert Bank E002"
+
+msgctxt "field:account.ebics.configuration,bank_e002_hash_expected_groups:"
+msgid "Expected Bank E002 Hash"
+msgstr "Erwarteter Hashwert Bank E002"
+
+msgctxt "field:account.ebics.configuration,bank_e002_hash_groups:"
+msgid "Bank E002 Hash"
+msgstr "Hashwert Bank E002"
 
 msgctxt "field:account.ebics.configuration,bank_keys_data:"
 msgid "Bank Keys"
@@ -66,13 +78,29 @@ msgctxt "field:account.ebics.configuration,bank_x002_hash:"
 msgid "Bank X002 Hash"
 msgstr "Hashwert Bank X002"
 
+msgctxt "field:account.ebics.configuration,bank_x002_hash_check:"
+msgid "X002 Comparison"
+msgstr "Vergleich X002"
+
 msgctxt "field:account.ebics.configuration,bank_x002_hash_expected:"
 msgid "Expected Bank X002 Hash"
 msgstr "Erwarteter Hashwert Bank X002"
 
+msgctxt "field:account.ebics.configuration,bank_x002_hash_expected_groups:"
+msgid "Expected Bank X002 Hash"
+msgstr "Erwarteter Hashwert Bank X002"
+
+msgctxt "field:account.ebics.configuration,bank_x002_hash_groups:"
+msgid "Bank X002 Hash"
+msgstr "Hashwert Bank X002"
+
 msgctxt "field:account.ebics.configuration,company:"
 msgid "Company"
 msgstr "Unternehmen"
+
+msgctxt "field:account.ebics.configuration,confirmed_state:"
+msgid "State after Confirmation"
+msgstr "Status nach Bestätigung"
 
 msgctxt "field:account.ebics.configuration,ebics_version:"
 msgid "EBICS Version"
@@ -158,6 +186,65 @@ msgstr "Zugang"
 msgctxt "field:account.ebics.configuration-account.ebics.format,format:"
 msgid "Format"
 msgstr "Format"
+
+msgctxt "field:account.ebics.configuration.confirm_bank_keys.start,bank:"
+msgid "Bank"
+msgstr "Bank"
+
+msgctxt "field:account.ebics.configuration.confirm_bank_keys.start,check:"
+msgid "Result"
+msgstr "Ergebnis"
+
+msgctxt "field:account.ebics.configuration.confirm_bank_keys.start,compared:"
+msgid "I compared the hash values with the information of the bank"
+msgstr "Ich habe die Hashwerte mit den Angaben der Bank verglichen"
+
+msgctxt ""
+"field:account.ebics.configuration.confirm_bank_keys.start,e002_check:"
+msgid "E002 Comparison"
+msgstr "Vergleich E002"
+
+msgctxt ""
+"field:account.ebics.configuration.confirm_bank_keys.start,e002_expected_groups:"
+msgid "Expected Bank E002 Hash"
+msgstr "Erwarteter Hashwert Bank E002"
+
+msgctxt "field:account.ebics.configuration.confirm_bank_keys.start,e002_hash:"
+msgid "E002 Hash"
+msgstr "Hashwert E002"
+
+msgctxt ""
+"field:account.ebics.configuration.confirm_bank_keys.start,e002_hash_groups:"
+msgid "Bank E002 Hash"
+msgstr "Hashwert Bank E002"
+
+msgctxt "field:account.ebics.configuration.confirm_bank_keys.start,host_id:"
+msgid "Host ID"
+msgstr "Host-ID"
+
+msgctxt ""
+"field:account.ebics.configuration.confirm_bank_keys.start,stays_suspended:"
+msgid "Stays Suspended"
+msgstr "Bleibt gesperrt"
+
+msgctxt ""
+"field:account.ebics.configuration.confirm_bank_keys.start,x002_check:"
+msgid "X002 Comparison"
+msgstr "Vergleich X002"
+
+msgctxt ""
+"field:account.ebics.configuration.confirm_bank_keys.start,x002_expected_groups:"
+msgid "Expected Bank X002 Hash"
+msgstr "Erwarteter Hashwert Bank X002"
+
+msgctxt "field:account.ebics.configuration.confirm_bank_keys.start,x002_hash:"
+msgid "X002 Hash"
+msgstr "Hashwert X002"
+
+msgctxt ""
+"field:account.ebics.configuration.confirm_bank_keys.start,x002_hash_groups:"
+msgid "Bank X002 Hash"
+msgstr "Hashwert Bank X002"
 
 msgctxt "field:account.ebics.configuration.reset_draft.start,confirm:"
 msgid "Yes, I want to delete"
@@ -411,6 +498,10 @@ msgctxt "help:account.ebics.configuration,company:"
 msgid "The company that holds the EBICS contract."
 msgstr "Das Unternehmen, das den EBICS-Vertrag hält."
 
+msgctxt "help:account.ebics.configuration,confirmed_state:"
+msgid "The state the connection gets when the bank keys are confirmed."
+msgstr "Der Status, den der Zugang beim Bestätigen der Bankschlüssel erhält."
+
 msgctxt "help:account.ebics.configuration,formats:"
 msgid "The formats to download for all accounts of this connection."
 msgstr "Die Formate, die für alle Konten dieses Zugangs abgerufen werden."
@@ -426,6 +517,15 @@ msgstr "Erst mit dem Zahlungs-Upload (v2) wirksam."
 msgctxt "help:account.ebics.configuration,url:"
 msgid "EBICS URL of the bank (https:// only)."
 msgstr "EBICS-URL der Bank (nur https://)."
+
+msgctxt ""
+"help:account.ebics.configuration.confirm_bank_keys.start,stays_suspended:"
+msgid ""
+"The connection was suspended before; after the confirmation it stays "
+"suspended until it is reactivated."
+msgstr ""
+"Der Zugang war vorher gesperrt; nach dem Bestätigen bleibt er gesperrt, bis "
+"er reaktiviert wird."
 
 msgctxt "help:account.ebics.configuration.reset_draft.start,confirm:"
 msgid "The private keys of this connection are deleted for good."
@@ -495,6 +595,10 @@ msgctxt "model:account.ebics.configuration-account.ebics.format,string:"
 msgid "EBICS Connection - Format"
 msgstr "EBICS-Zugang - Format"
 
+msgctxt "model:account.ebics.configuration.confirm_bank_keys.start,string:"
+msgid "Confirm Bank Keys"
+msgstr "Bankschlüssel bestätigen"
+
 msgctxt "model:account.ebics.configuration.reset_draft.start,string:"
 msgid "Reset EBICS Connection to Draft"
 msgstr "EBICS-Zugang auf Entwurf zurücksetzen"
@@ -555,6 +659,10 @@ msgctxt "model:ir.action,name:report_ini_letter_ini"
 msgid "INI Letter"
 msgstr "INI-Brief"
 
+msgctxt "model:ir.action,name:wizard_configuration_confirm_bank_keys"
+msgid "Confirm Bank Keys"
+msgstr "Bankschlüssel bestätigen"
+
 msgctxt "model:ir.action,name:wizard_configuration_reset_draft"
 msgid "Reset to Draft"
 msgstr "Auf Entwurf zurücksetzen"
@@ -584,6 +692,87 @@ msgid ""
 msgstr ""
 "Der Beginn der Gültigkeit des Kontos „%(account)s“ darf nicht nach ihrem "
 "Ende liegen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_changed"
+msgid ""
+"The bank keys of EBICS connection \"%(configuration)s\" have changed. "
+"Compare the new hash values with the information of the bank and confirm "
+"them; until then no orders are possible."
+msgstr ""
+"Die Bankschlüssel des EBICS-Zugangs „%(configuration)s“ haben sich geändert."
+" Die neuen Hashwerte mit den Angaben der Bank vergleichen und bestätigen; "
+"bis dahin sind keine Aufträge möglich."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_changed_meanwhile"
+msgid ""
+"The bank keys of EBICS connection \"%(configuration)s\" have changed in the "
+"meantime. Please open the dialog again."
+msgstr ""
+"Die Bankschlüssel des EBICS-Zugangs „%(configuration)s“ haben sich "
+"inzwischen geändert. Bitte den Dialog erneut öffnen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_mismatch"
+msgid ""
+"The hash values of the bank keys of EBICS connection \"%(configuration)s\" "
+"differ from the expected values. Check the information of the bank and fetch"
+" the bank keys again."
+msgstr ""
+"Die Hashwerte der Bankschlüssel des EBICS-Zugangs „%(configuration)s“ "
+"weichen von den erwarteten Werten ab. Die Angaben der Bank prüfen und die "
+"Bankschlüssel erneut abrufen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_missing"
+msgid "EBICS connection \"%(configuration)s\" has no confirmed bank keys."
+msgstr ""
+"Der EBICS-Zugang „%(configuration)s“ hat keine bestätigten Bankschlüssel."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_not_compared"
+msgid ""
+"Please confirm that you compared the hash values of the bank keys of EBICS "
+"connection \"%(configuration)s\" with the information of the bank."
+msgstr ""
+"Bitte bestätigen, dass die Hashwerte der Bankschlüssel des EBICS-Zugangs "
+"„%(configuration)s“ mit den Angaben der Bank verglichen wurden."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_received"
+msgid ""
+"The bank keys of EBICS connection \"%(configuration)s\" were received. "
+"Compare the hash values with the information of the bank and confirm them."
+msgstr ""
+"Die Bankschlüssel des EBICS-Zugangs „%(configuration)s“ wurden abgerufen. "
+"Die Hashwerte mit den Angaben der Bank vergleichen und bestätigen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_unchanged"
+msgid "The bank keys of EBICS connection \"%(configuration)s\" are unchanged."
+msgstr ""
+"Die Bankschlüssel des EBICS-Zugangs „%(configuration)s“ sind unverändert."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_update_required"
+msgid ""
+"The bank has new keys for EBICS connection \"%(configuration)s\" "
+"(%(order_type)s: 091008 EBICS_BANK_PUBKEY_UPDATE_REQUIRED). Fetch the bank "
+"keys (HPB) and confirm them."
+msgstr ""
+"Die Bank hat neue Schlüssel für den EBICS-Zugang „%(configuration)s“ "
+"(%(order_type)s: 091008 EBICS_BANK_PUBKEY_UPDATE_REQUIRED). Die "
+"Bankschlüssel abrufen (HPB) und bestätigen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_bank_keys_wrong_state"
+msgid ""
+"The bank keys of EBICS connection \"%(configuration)s\" can only be "
+"confirmed in the state \"Bank Keys Received\"."
+msgstr ""
+"Die Bankschlüssel des EBICS-Zugangs „%(configuration)s“ können nur im Status"
+" „Bankschlüssel empfangen“ bestätigt werden."
 
 msgctxt "model:ir.message,text:msg_configuration_format_unique"
 msgid "A format can be added only once to an EBICS connection."
@@ -662,6 +851,18 @@ msgid ""
 msgstr ""
 "Ein Format mit der BTF-Angabe „%(btf)s“ existiert bereits (Format "
 "„%(format)s“)."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_hpb_not_released"
+msgid ""
+"EBICS connection \"%(configuration)s\" is not yet released by the bank "
+"(091002 EBICS_INVALID_USER_OR_USER_STATE). Send the signed initialisation "
+"letters to the bank and try again after the release."
+msgstr ""
+"Der EBICS-Zugang „%(configuration)s“ ist von der Bank noch nicht "
+"freigeschaltet (091002 EBICS_INVALID_USER_OR_USER_STATE). Die "
+"unterschriebenen Initialisierungsbriefe an die Bank senden und nach der "
+"Freischaltung erneut versuchen."
 
 #, python-format
 msgctxt "model:ir.message,text:msg_keyring_missing"
@@ -752,6 +953,15 @@ msgstr ""
 " Der Teilnehmer ist bei der Bank nicht im Zustand „neu“ (bereits "
 "initialisiert oder gesperrt)."
 
+#, python-format
+msgctxt "model:ir.message,text:msg_participant_suspended"
+msgid ""
+"The bank refused %(order_type)s of EBICS connection \"%(configuration)s\": "
+"the participant is locked at the bank (091004 EBICS_INVALID_USER_STATE)."
+msgstr ""
+"Die Bank hat %(order_type)s des EBICS-Zugangs „%(configuration)s“ abgelehnt:"
+" Der Teilnehmer ist bei der Bank gesperrt (091004 EBICS_INVALID_USER_STATE)."
+
 msgctxt "model:ir.message,text:msg_passphrase_missing"
 msgid ""
 "The passphrase of the EBICS keys is missing in the section [account_ebics] "
@@ -761,6 +971,15 @@ msgstr ""
 "Die Passphrase der EBICS-Schlüssel fehlt im Abschnitt [account_ebics] der "
 "trytond.conf (oder in der Umgebungsvariablen "
 "TRYTOND_ACCOUNT_EBICS__PASSPHRASE)."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_reactivate_no_bank_keys"
+msgid ""
+"EBICS connection \"%(configuration)s\" cannot be reactivated without "
+"confirmed bank keys."
+msgstr ""
+"Der EBICS-Zugang „%(configuration)s“ kann ohne bestätigte Bankschlüssel "
+"nicht reaktiviert werden."
 
 #, python-format
 msgctxt "model:ir.message,text:msg_reset_not_confirmed"
@@ -780,6 +999,14 @@ msgstr ""
 "Die Verbindung zur Bank ist für den EBICS-Zugang „%(configuration)s“ "
 "fehlgeschlagen: %(error)s"
 
+msgctxt "model:ir.model.button,string:configuration_confirm_bank_keys_button"
+msgid "Confirm Bank Keys"
+msgstr "Bankschlüssel bestätigen"
+
+msgctxt "model:ir.model.button,string:configuration_fetch_bank_keys_button"
+msgid "Fetch Bank Keys"
+msgstr "Bankschlüssel abrufen"
+
 msgctxt "model:ir.model.button,string:configuration_generate_keys_button"
 msgid "Generate Keys"
 msgstr "Schlüssel erzeugen"
@@ -792,6 +1019,10 @@ msgctxt "model:ir.model.button,string:configuration_print_ini_letter_button"
 msgid "INI Letter"
 msgstr "INI-Brief"
 
+msgctxt "model:ir.model.button,string:configuration_reactivate_button"
+msgid "Reactivate"
+msgstr "Reaktivieren"
+
 msgctxt "model:ir.model.button,string:configuration_reset_draft_button"
 msgid "Reset to Draft"
 msgstr "Auf Entwurf zurücksetzen"
@@ -803,6 +1034,10 @@ msgstr "HIA senden"
 msgctxt "model:ir.model.button,string:configuration_send_ini_button"
 msgid "Send INI"
 msgstr "INI senden"
+
+msgctxt "model:ir.model.button,string:configuration_suspend_button"
+msgid "Suspend"
+msgstr "Sperren"
 
 msgctxt "model:ir.rule.group,name:rule_group_account_companies"
 msgid "User in companies"
@@ -1027,6 +1262,38 @@ msgctxt "report:account.ebics.ini_letter_ini:"
 msgid "Version"
 msgstr "Verfahren"
 
+msgctxt "selection:account.ebics.configuration,bank_e002_hash_check:"
+msgid "Match"
+msgstr "stimmt überein"
+
+msgctxt "selection:account.ebics.configuration,bank_e002_hash_check:"
+msgid "Mismatch"
+msgstr "abweichend"
+
+msgctxt "selection:account.ebics.configuration,bank_e002_hash_check:"
+msgid "No Value of the Bank"
+msgstr "keine Angabe der Bank"
+
+msgctxt "selection:account.ebics.configuration,bank_x002_hash_check:"
+msgid "Match"
+msgstr "stimmt überein"
+
+msgctxt "selection:account.ebics.configuration,bank_x002_hash_check:"
+msgid "Mismatch"
+msgstr "abweichend"
+
+msgctxt "selection:account.ebics.configuration,bank_x002_hash_check:"
+msgid "No Value of the Bank"
+msgstr "keine Angabe der Bank"
+
+msgctxt "selection:account.ebics.configuration,confirmed_state:"
+msgid "Active"
+msgstr "Aktiv"
+
+msgctxt "selection:account.ebics.configuration,confirmed_state:"
+msgid "Suspended"
+msgstr "Gesperrt"
+
 msgctxt "selection:account.ebics.configuration,ebics_version:"
 msgid "EBICS 3.0 (H005)"
 msgstr "EBICS 3.0 (H005)"
@@ -1082,6 +1349,48 @@ msgstr "Schlüssel erzeugt"
 msgctxt "selection:account.ebics.configuration,state:"
 msgid "Suspended"
 msgstr "Gesperrt"
+
+msgctxt "selection:account.ebics.configuration.confirm_bank_keys.start,check:"
+msgid "Match"
+msgstr "stimmt überein"
+
+msgctxt "selection:account.ebics.configuration.confirm_bank_keys.start,check:"
+msgid "Mismatch"
+msgstr "abweichend"
+
+msgctxt "selection:account.ebics.configuration.confirm_bank_keys.start,check:"
+msgid "No Value of the Bank"
+msgstr "keine Angabe der Bank"
+
+msgctxt ""
+"selection:account.ebics.configuration.confirm_bank_keys.start,e002_check:"
+msgid "Match"
+msgstr "stimmt überein"
+
+msgctxt ""
+"selection:account.ebics.configuration.confirm_bank_keys.start,e002_check:"
+msgid "Mismatch"
+msgstr "abweichend"
+
+msgctxt ""
+"selection:account.ebics.configuration.confirm_bank_keys.start,e002_check:"
+msgid "No Value of the Bank"
+msgstr "keine Angabe der Bank"
+
+msgctxt ""
+"selection:account.ebics.configuration.confirm_bank_keys.start,x002_check:"
+msgid "Match"
+msgstr "stimmt überein"
+
+msgctxt ""
+"selection:account.ebics.configuration.confirm_bank_keys.start,x002_check:"
+msgid "Mismatch"
+msgstr "abweichend"
+
+msgctxt ""
+"selection:account.ebics.configuration.confirm_bank_keys.start,x002_check:"
+msgid "No Value of the Bank"
+msgstr "keine Angabe der Bank"
 
 msgctxt "selection:account.ebics.format,container:"
 msgid "SVC"
@@ -1159,6 +1468,30 @@ msgctxt "selection:account.ebics.log.file,state:"
 msgid "Unknown Account"
 msgstr "Unbekanntes Konto"
 
+msgctxt "view:account.ebics.configuration.confirm_bank_keys.start:"
+msgid ""
+"Only after the confirmation, orders are signed and encrypted with these "
+"keys."
+msgstr ""
+"Erst nach der Bestätigung werden Aufträge mit diesen Schlüsseln signiert und"
+" verschlüsselt."
+
+msgctxt "view:account.ebics.configuration.confirm_bank_keys.start:"
+msgid ""
+"The connection was suspended before: after the confirmation it stays "
+"suspended. Use \"Reactivate\" to activate it."
+msgstr ""
+"Der Zugang war vorher gesperrt: Nach dem Bestätigen bleibt er gesperrt. Mit "
+"„Reaktivieren“ wird er wieder aktiv."
+
+msgctxt "view:account.ebics.configuration.confirm_bank_keys.start:"
+msgid ""
+"The hash values must match the information of the bank (letter, online "
+"banking, initialisation letter of the bank)."
+msgstr ""
+"Die Hashwerte müssen mit den Angaben der Bank übereinstimmen (Schreiben, "
+"Online-Banking, Initialisierungsbrief der Bank)."
+
 msgctxt "view:account.ebics.configuration.reset_draft.start:"
 msgid ""
 "Afterwards generate the keys, send INI and HIA and print new initialisation "
@@ -1226,6 +1559,16 @@ msgstr "Rückgabe"
 msgctxt "view:account.ebics.log:"
 msgid "Time"
 msgstr "Uhrzeit"
+
+msgctxt ""
+"wizard_button:account.ebics.configuration.confirm_bank_keys,start,confirm:"
+msgid "Confirm"
+msgstr "Bestätigen"
+
+msgctxt ""
+"wizard_button:account.ebics.configuration.confirm_bank_keys,start,end:"
+msgid "Cancel"
+msgstr "Abbrechen"
 
 msgctxt "wizard_button:account.ebics.configuration.reset_draft,start,end:"
 msgid "Cancel"

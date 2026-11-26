@@ -150,6 +150,7 @@ label { color: var(--muted); }
     <div class="row">
       <button data-cmd="demo">demo</button>
       <label><input type="checkbox" id="negative"> --negative</label>
+      <button data-cmd="rotate-bank-keys">rotate-bank-keys</button>
       <button data-cmd="reset" class="danger">reset</button>
     </div>
     <div class="row">
@@ -464,6 +465,12 @@ label { color: var(--muted); }
     "fault-clear": function () { run(["fault", "--clear"]); },
     "demo": function () {
       run($("negative").checked ? ["demo", "--negative"] : ["demo"]);
+    },
+    "rotate-bank-keys": function () {
+      if (window.confirm("Neue Bankschlüssel X002/E002 erzeugen? Danach " +
+          "liefert HPB neue Hashwerte; in Tryton erneut bestätigen.")) {
+        run(["rotate-bank-keys"]);
+      }
     },
     "reset": function () {
       if (window.confirm("Zustand des Testservers löschen? Das TLS-Zertifikat " +

@@ -765,6 +765,45 @@ class HttpsTestCase(unittest.TestCase):
             self.assertEqual(codes(response)[0], '061002')
         self.assertIn('061002', out.getvalue())
 
+    # E07 T8
+    def test_rotate_bank_keys(self):
+        "rotate-bank-keys changes X002/E002; HPB delivers the new keys"
+        with running_server(self.directory) as (server, store, out):
+            ebics = self.client(server, store)
+            self.assertTrue(ebics.ini().ok)
+            self.assertTrue(ebics.hia().ok)
+            self.tool('release', 'TESTPARTNER', 'TESTUSER')
+            before = ebics.hpb().data['bank_keys']
+            a006 = store.bank().bank_hash('A006')
+            output = self.tool('rotate-bank-keys')
+            bank = store.bank()
+            self.assertEqual(bank.bank_hash('A006'), a006)
+            after = ebics.hpb().data['bank_keys']
+            status = self.tool('status')
+            bank_json = read_json(self.directory, testserver.BANK)
+            for purpose in ['X002', 'E002']:
+                with self.subTest(purpose=purpose):
+                    self.assertNotEqual(
+                        after[purpose]['hash'], before[purpose]['hash'])
+                    self.assertEqual(
+                        after[purpose]['hash'], bank.bank_hash(purpose))
+                    self.assertIn(after[purpose]['hash'], output)
+                    self.assertIn(before[purpose]['hash'], output)
+                    self.assertIn(after[purpose]['hash'], status)
+                    self.assertNotIn(before[purpose]['hash'], status)
+                    self.assertEqual(bank_json['bank_keys'][purpose],
+                        after[purpose]['hash'])
+            # the participant and its state are kept
+            self.assertEqual(
+                bank.participants[('TESTPARTNER', 'TESTUSER')].state,
+                fake_bank.READY)
+            # no private key and no passphrase in the state files
+            for name in [testserver.BANK, testserver.PARTICIPANTS]:
+                with open(os.path.join(self.directory, name), 'rb') as f:
+                    content = f.read()
+                self.assertNotIn(b'PRIVATE', content)
+                self.assertNotIn(testserver.PASSPHRASE.encode(), content)
+
     # T7
     def test_tls_verification(self):
         "Without ca_bundle the connection fails (unknown certificate)"
@@ -1255,6 +1294,25 @@ class AdminTestCase(unittest.TestCase):
                         testserver.PARTICIPANTS)))
             self.assertEqual(self.api(server, 'messages')['total'], 0)
             self.assertTrue(os.path.exists(store.certificate_path))
+
+    # E07 T8
+    def test_rotate_bank_keys_command(self):
+        "rotate-bank-keys over the web page, with a question in the page"
+        with open(ADMIN_PAGE, encoding='utf-8') as f:
+            source = f.read()
+        self.assertIn('data-cmd="rotate-bank-keys"', source)
+        self.assertTrue(re.search(
+                r'confirm\(.{0,300}?\)\)\s*\{\s*'
+                r'run\(\["rotate-bank-keys"\]\)', source, re.DOTALL))
+        with running_server(self.directory) as (server, store, out):
+            before = store.bank().bank_hash('X002')
+            code, output = self.command(server, 'rotate-bank-keys')
+            self.assertEqual(code, 0, output)
+            after = store.bank().bank_hash('X002')
+            self.assertNotEqual(after, before)
+            self.assertIn(after, output)
+            self.assertIn('Befehl über die Seite: rotate-bank-keys (Exit 0)',
+                out.getvalue())
 
     # T6
     def test_page_source(self):

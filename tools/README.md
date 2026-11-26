@@ -80,6 +80,7 @@ sie nicht in `files.json` steht.
 | `make-camt053 --iban IBAN [--date JJJJ-MM-TT] [--entries 5] [--currency EUR] [--start-balance 1000.00]` | erfundene camt.053.001.08 erzeugen und unter `EOP/DE/camt.053/ZIP` bereitstellen |
 | `fault <name> [<wert>]`, `fault --clear`, `fault` | Fehlerfall ein- oder ausschalten, alle löschen bzw. anzeigen |
 | `demo [--port 8443] [--negative]` | Selbsttest ohne Tryton gegen den laufenden Server: HEV → INI → HIA → (Freigabe) → HPB → BTD → Quittung |
+| `rotate-bank-keys` | neue Bankschlüssel X002 und E002 (A006 bleibt); Keyring und `bank.json` werden aktualisiert, HPB liefert danach die neuen Hashwerte (Wechsel der Bankschlüssel von Hand testen, E07) |
 | `reset [--yes]` | Zustand löschen; das TLS-Zertifikat bleibt, damit `ca_bundle` gültig bleibt |
 
 ### BTF-Angabe bei `add-file`
@@ -166,7 +167,7 @@ Aufbau der Seite:
 - **unten** Buttons für `status`, `release` und `suspend` (Teilnehmer aus
   der Auswahlliste), `make-camt053` (IBAN, Anzahl Buchungen), `fault`
   (Fehlerfall, Wert) und `fault --clear`, `demo` (optional `--negative`),
-  `reset` (mit Rückfrage), dazu ein Eingabefeld für beliebige Befehle
+  `rotate-bank-keys` und `reset` (beide mit Rückfrage), dazu ein Eingabefeld für beliebige Befehle
   (wie auf der Kommandozeile, ohne Programmnamen, z. B.
   `add-file EOP/DE/camt.053/ZIP /pfad/datei.xml`) und das Ausgabefeld mit
   Exit-Code.

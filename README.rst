@@ -33,8 +33,12 @@ In development, not yet usable with a bank. Available so far:
   The passphrase of the keys and the connection values are read from
   ``trytond.conf``, see ``doc/configuration.rst``.
 
-Not yet available: bank keys (HPB), statement download and import, and
-payment upload (BTU).
+* Initialisation, second part: fetch the bank keys (HPB), compare the hash
+  values with the information of the bank and confirm them, suspend and
+  reactivate the connection.
+
+Not yet available: statement download and import, and payment upload
+(BTU).
 
 Dependencies
 ************
