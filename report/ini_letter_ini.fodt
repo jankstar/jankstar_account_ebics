@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:chart="urn:oasis:names:tc:opendocument:xmlns:chart:1.0" xmlns:dr3d="urn:oasis:names:tc:opendocument:xmlns:dr3d:1.0" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:form="urn:oasis:names:tc:opendocument:xmlns:form:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:ooo="http://openoffice.org/2004/office" xmlns:ooow="http://openoffice.org/2004/writer" xmlns:oooc="http://openoffice.org/2004/calc" xmlns:dom="http://www.w3.org/2001/xml-events" xmlns:xforms="http://www.w3.org/2002/xforms" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:rpt="http://openoffice.org/2005/report" xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:grddl="http://www.w3.org/2003/g/data-view#" xmlns:officeooo="http://openoffice.org/2009/office" xmlns:tableooo="http://openoffice.org/2009/table" xmlns:drawooo="http://openoffice.org/2010/draw" xmlns:calcext="urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0" xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:field="urn:openoffice:names:experimental:ooo-ms-interop:xmlns:field:1.0" xmlns:formx="urn:openoffice:names:experimental:ooxml-odf-interop:xmlns:form:1.0" xmlns:css3t="http://www.w3.org/TR/css3-text/" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:meta>
+  <dc:title>Initialisation letter INI</dc:title>
+ </office:meta>
+ <office:font-face-decls>
+  <style:font-face style:name="Liberation Sans" svg:font-family="&apos;Liberation Sans&apos;" style:font-family-generic="swiss" style:font-pitch="variable"/>
+  <style:font-face style:name="Liberation Mono" svg:font-family="&apos;Liberation Mono&apos;" style:font-family-generic="modern" style:font-pitch="fixed"/>
+ </office:font-face-decls>
+ <office:styles>
+  <style:default-style style:family="paragraph">
+   <style:paragraph-properties fo:margin-top="0cm" fo:margin-bottom="0.1cm"/>
+   <style:text-properties style:font-name="Liberation Sans" fo:font-size="10pt" fo:language="de" fo:country="DE"/>
+  </style:default-style>
+  <style:style style:name="Standard" style:family="paragraph" style:class="text"/>
+  <style:style style:name="Title" style:family="paragraph" style:parent-style-name="Standard">
+   <style:paragraph-properties fo:margin-bottom="0.3cm"/>
+   <style:text-properties fo:font-size="16pt" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="Heading" style:family="paragraph" style:parent-style-name="Standard">
+   <style:paragraph-properties fo:margin-top="0.4cm" fo:margin-bottom="0.15cm" fo:keep-with-next="always"/>
+   <style:text-properties fo:font-size="12pt" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="Label" style:family="paragraph" style:parent-style-name="Standard">
+   <style:text-properties fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="Mono" style:family="paragraph" style:parent-style-name="Standard">
+   <style:paragraph-properties fo:margin-bottom="0cm"/>
+   <style:text-properties style:font-name="Liberation Mono" fo:font-size="8pt"/>
+  </style:style>
+  <style:style style:name="Hash" style:family="paragraph" style:parent-style-name="Standard">
+   <style:paragraph-properties fo:margin-bottom="0cm"/>
+   <style:text-properties style:font-name="Liberation Mono" fo:font-size="11pt" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="Note" style:family="paragraph" style:parent-style-name="Standard">
+   <style:paragraph-properties fo:margin-top="0.4cm"/>
+   <style:text-properties fo:font-style="italic"/>
+  </style:style>
+ </office:styles>
+ <office:automatic-styles>
+  <style:page-layout style:name="pm1">
+   <style:page-layout-properties fo:page-width="21cm" fo:page-height="29.7cm" fo:margin-top="2cm" fo:margin-bottom="2cm" fo:margin-left="2.5cm" fo:margin-right="2cm"/>
+  </style:page-layout>
+  <style:style style:name="Table" style:family="table">
+   <style:table-properties style:width="16.5cm" table:align="left"/>
+  </style:style>
+  <style:style style:name="Table.A" style:family="table-column">
+   <style:table-column-properties style:column-width="5cm"/>
+  </style:style>
+  <style:style style:name="Table.B" style:family="table-column">
+   <style:table-column-properties style:column-width="11.5cm"/>
+  </style:style>
+  <style:style style:name="Cell" style:family="table-cell">
+   <style:table-cell-properties fo:padding="0.05cm" fo:border="none"/>
+  </style:style>
+  <style:style style:name="Sign" style:family="table-cell">
+   <style:table-cell-properties fo:padding-top="1.5cm" fo:border-bottom="0.5pt solid #000000" fo:border-top="none" fo:border-left="none" fo:border-right="none"/>
+  </style:style>
+ </office:automatic-styles>
+ <office:master-styles>
+  <style:master-page style:name="Standard" style:page-layout-name="pm1"/>
+ </office:master-styles>
+ <office:body>
+  <office:text>
+   <text:p text:style-name="Title">Initialisation letter INI</text:p>
+   <text:p text:style-name="Standard">Public key for the bank-technical electronic signature</text:p>
+   <table:table table:name="Header" table:style-name="Table">
+    <table:table-column table:style-name="Table.A"/>
+    <table:table-column table:style-name="Table.B"/>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">User name</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.user_name&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Date</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;format_date(letter.timestamp.date(), user.language) if letter.timestamp else '-'&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Time</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.timestamp.strftime('%H:%M:%S') if letter.timestamp else '-'&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Bank</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.bank_name&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">BIC</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.bic&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Host ID</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.host_id&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">User ID</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.user_id&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Partner ID</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.partner_id&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Company</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.company&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+   </table:table>
+   <text:p text:style-name="Heading">Bank-technical signature</text:p>
+   <table:table table:name="Certificate1" table:style-name="Table">
+    <table:table-column table:style-name="Table.A"/>
+    <table:table-column table:style-name="Table.B"/>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Purpose</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard">Bank-technical signature</text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Label">Version</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;letter.certificates['A006'].version&gt;</text:placeholder></text:p></table:table-cell>
+    </table:table-row>
+   </table:table>
+   <text:p text:style-name="Label">Hash value (SHA-256)</text:p>
+   <text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;for each=&quot;line in letter.certificates['A006'].hash_lines&quot;&gt;</text:placeholder></text:p>
+   <text:p text:style-name="Hash"><text:placeholder text:placeholder-type="text">&lt;line&gt;</text:placeholder></text:p>
+   <text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;/for&gt;</text:placeholder></text:p>
+   <text:p text:style-name="Label">Certificate (PEM)</text:p>
+   <text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;for each=&quot;line in letter.certificates['A006'].pem_lines&quot;&gt;</text:placeholder></text:p>
+   <text:p text:style-name="Mono"><text:placeholder text:placeholder-type="text">&lt;line&gt;</text:placeholder></text:p>
+   <text:p text:style-name="Standard"><text:placeholder text:placeholder-type="text">&lt;/for&gt;</text:placeholder></text:p>
+   <text:p text:style-name="Note">I hereby confirm the above public key(s) for my electronic signature.</text:p>
+   <table:table table:name="Signature" table:style-name="Table">
+    <table:table-column table:style-name="Table.A"/>
+    <table:table-column table:style-name="Table.B"/>
+    <table:table-row>
+     <table:table-cell table:style-name="Sign" office:value-type="string"><text:p text:style-name="Standard"/></table:table-cell>
+     <table:table-cell table:style-name="Sign" office:value-type="string"><text:p text:style-name="Standard"/></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard">Place, date</text:p></table:table-cell>
+     <table:table-cell table:style-name="Cell" office:value-type="string"><text:p text:style-name="Standard">Signature of the participant</text:p></table:table-cell>
+    </table:table-row>
+   </table:table>
+   <text:p text:style-name="Note">Please sign this letter and send it to your bank.</text:p>
+  </office:text>
+ </office:body>
+</office:document>

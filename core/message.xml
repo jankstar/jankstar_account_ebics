@@ -62,5 +62,43 @@ copyright notices and license terms. -->
         <record model="ir.message" id="msg_log_copy">
             <field name="text">Records of "%(model)s" cannot be copied.</field>
         </record>
+
+        <!-- Keys and orders INI, HIA (working paper E06 ch. 4.5) -->
+        <record model="ir.message" id="msg_passphrase_missing">
+            <field name="text">The passphrase of the EBICS keys is missing in the section [account_ebics] of trytond.conf (or the environment variable TRYTOND_ACCOUNT_EBICS__PASSPHRASE).</field>
+        </record>
+        <record model="ir.message" id="msg_configuration_setting">
+            <field name="text">The value "%(name)s" in the section [account_ebics] of trytond.conf is not valid.</field>
+        </record>
+        <record model="ir.message" id="msg_configuration_ids">
+            <field name="text">The values "%(fields)s" of EBICS connection "%(configuration)s" are not valid EBICS identifiers.</field>
+        </record>
+        <record model="ir.message" id="msg_keyring_missing">
+            <field name="text">EBICS connection "%(configuration)s" has no keys.</field>
+        </record>
+        <record model="ir.message" id="msg_keyring_unreadable">
+            <field name="text">The keys of EBICS connection "%(configuration)s" cannot be loaded (wrong passphrase?).</field>
+        </record>
+        <record model="ir.message" id="msg_order_running">
+            <field name="text">Another EBICS order of connection "%(configuration)s" is running. Please try again later.</field>
+        </record>
+        <record model="ir.message" id="msg_transport_error">
+            <field name="text">The connection to the bank failed for EBICS connection "%(configuration)s": %(error)s</field>
+        </record>
+        <record model="ir.message" id="msg_order_failed">
+            <field name="text">The order %(order_type)s of EBICS connection "%(configuration)s" failed: %(error)s</field>
+        </record>
+        <record model="ir.message" id="msg_order_user_state">
+            <field name="text">The bank refused %(order_type)s of EBICS connection "%(configuration)s": the participant is not in the state "new" at the bank (already initialised or locked).</field>
+        </record>
+        <record model="ir.message" id="msg_order_ebics_error">
+            <field name="text">EBICS error in %(order_type)s of connection "%(configuration)s": %(code)s %(symbol)s: %(text)s</field>
+        </record>
+        <record model="ir.message" id="msg_reset_not_confirmed">
+            <field name="text">Please confirm the deletion of the keys of EBICS connection "%(configuration)s".</field>
+        </record>
+        <record model="ir.message" id="msg_letter_not_sent">
+            <field name="text">The initialisation letter %(order_type)s of EBICS connection "%(configuration)s" can only be printed after the bank accepted %(order_type)s.</field>
+        </record>
     </data>
 </tryton>

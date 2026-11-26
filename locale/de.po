@@ -150,13 +150,34 @@ msgctxt "field:account.ebics.configuration,user_x002_hash:"
 msgid "User X002 Hash"
 msgstr "Hashwert Teilnehmer X002"
 
-msgctxt "field:account.ebics.configuration-account.ebics.format,configuration:"
+msgctxt ""
+"field:account.ebics.configuration-account.ebics.format,configuration:"
 msgid "Connection"
 msgstr "Zugang"
 
 msgctxt "field:account.ebics.configuration-account.ebics.format,format:"
 msgid "Format"
 msgstr "Format"
+
+msgctxt "field:account.ebics.configuration.reset_draft.start,confirm:"
+msgid "Yes, I want to delete"
+msgstr "Ja, ich will löschen"
+
+msgctxt "field:account.ebics.configuration.reset_draft.start,host_id:"
+msgid "Host ID"
+msgstr "Host-ID"
+
+msgctxt "field:account.ebics.configuration.reset_draft.start,name:"
+msgid "Name"
+msgstr "Name"
+
+msgctxt "field:account.ebics.configuration.reset_draft.start,partner_id:"
+msgid "Partner ID"
+msgstr "Kunden-ID"
+
+msgctxt "field:account.ebics.configuration.reset_draft.start,user_id:"
+msgid "User ID"
+msgstr "Teilnehmer-ID"
 
 msgctxt "field:account.ebics.format,btf_params:"
 msgid "BTF Parameters"
@@ -406,6 +427,10 @@ msgctxt "help:account.ebics.configuration,url:"
 msgid "EBICS URL of the bank (https:// only)."
 msgstr "EBICS-URL der Bank (nur https://)."
 
+msgctxt "help:account.ebics.configuration.reset_draft.start,confirm:"
+msgid "The private keys of this connection are deleted for good."
+msgstr "Die privaten Schlüssel dieses Zugangs werden endgültig gelöscht."
+
 msgctxt "help:account.ebics.format,active:"
 msgid "Deactivate standard formats instead of deleting them."
 msgstr "Standardformate deaktivieren statt löschen."
@@ -470,6 +495,10 @@ msgctxt "model:account.ebics.configuration-account.ebics.format,string:"
 msgid "EBICS Connection - Format"
 msgstr "EBICS-Zugang - Format"
 
+msgctxt "model:account.ebics.configuration.reset_draft.start,string:"
+msgid "Reset EBICS Connection to Draft"
+msgstr "EBICS-Zugang auf Entwurf zurücksetzen"
+
 msgctxt "model:account.ebics.format,name:format_camt052_de"
 msgid "Intraday Transactions (camt.052)"
 msgstr "Untertägige Umsätze (camt.052)"
@@ -518,10 +547,23 @@ msgctxt "model:ir.action,name:act_log_form"
 msgid "Logs"
 msgstr "Protokoll"
 
+msgctxt "model:ir.action,name:report_ini_letter_hia"
+msgid "HIA Letter"
+msgstr "HIA-Brief"
+
+msgctxt "model:ir.action,name:report_ini_letter_ini"
+msgid "INI Letter"
+msgstr "INI-Brief"
+
+msgctxt "model:ir.action,name:wizard_configuration_reset_draft"
+msgid "Reset to Draft"
+msgstr "Auf Entwurf zurücksetzen"
+
 msgctxt "model:ir.message,text:msg_account_bank_account_unique"
 msgid "A bank account can be released only once per EBICS connection."
 msgstr "Ein Bankkonto kann je EBICS-Zugang nur einmal freigegeben werden."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_account_company"
 msgid ""
 "The company of account \"%(account)s\" must be the company of EBICS "
@@ -530,20 +572,24 @@ msgstr ""
 "Das Unternehmen des Kontos „%(account)s“ muss das Unternehmen des EBICS-"
 "Zugangs „%(configuration)s“ sein."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_account_iban_required"
 msgid "The bank account \"%(bank_account)s\" has no IBAN."
 msgstr "Das Bankkonto „%(bank_account)s“ hat keine IBAN."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_account_validity"
-msgid "The start of validity of account \"%(account)s\" must not be after its end."
+msgid ""
+"The start of validity of account \"%(account)s\" must not be after its end."
 msgstr ""
-"Der Beginn der Gültigkeit des Kontos „%(account)s“ darf nicht nach ihrem Ende"
-" liegen."
+"Der Beginn der Gültigkeit des Kontos „%(account)s“ darf nicht nach ihrem "
+"Ende liegen."
 
 msgctxt "model:ir.message,text:msg_configuration_format_unique"
 msgid "A format can be added only once to an EBICS connection."
 msgstr "Ein Format kann einem EBICS-Zugang nur einmal zugeordnet werden."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_configuration_hash_format"
 msgid ""
 "The value of \"%(field)s\" of EBICS connection \"%(configuration)s\" must "
@@ -552,36 +598,63 @@ msgstr ""
 "Der Wert von „%(field)s“ des EBICS-Zugangs „%(configuration)s“ muss aus 64 "
 "Hexadezimalzeichen bestehen."
 
+#, python-format
+msgctxt "model:ir.message,text:msg_configuration_ids"
+msgid ""
+"The values \"%(fields)s\" of EBICS connection \"%(configuration)s\" are not "
+"valid EBICS identifiers."
+msgstr ""
+"Die Werte „%(fields)s“ des EBICS-Zugangs „%(configuration)s“ sind keine "
+"gültigen EBICS-Kennungen."
+
 msgctxt "model:ir.message,text:msg_configuration_participant_unique"
 msgid ""
 "The combination of host ID, partner ID and user ID must be unique per "
 "company."
 msgstr ""
-"Die Kombination aus Host-ID, Kunden-ID und Teilnehmer-ID muss je Unternehmen "
-"eindeutig sein."
+"Die Kombination aus Host-ID, Kunden-ID und Teilnehmer-ID muss je Unternehmen"
+" eindeutig sein."
 
+#, python-format
+msgctxt "model:ir.message,text:msg_configuration_setting"
+msgid ""
+"The value \"%(name)s\" in the section [account_ebics] of trytond.conf is not"
+" valid."
+msgstr ""
+"Der Wert „%(name)s“ im Abschnitt [account_ebics] der trytond.conf ist "
+"ungültig."
+
+#, python-format
 msgctxt "model:ir.message,text:msg_configuration_url_https"
-msgid "The URL of EBICS connection \"%(configuration)s\" must start with \"https://\"."
+msgid ""
+"The URL of EBICS connection \"%(configuration)s\" must start with "
+"\"https://\"."
 msgstr ""
 "Die URL des EBICS-Zugangs „%(configuration)s“ muss mit „https://“ beginnen."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_format_import_camt053"
 msgid ""
-"Format \"%(format)s\" can only be imported as statement for message camt.053."
+"Format \"%(format)s\" can only be imported as statement for message "
+"camt.053."
 msgstr ""
 "Das Format „%(format)s“ kann nur bei der Nachricht camt.053 als Kontoauszug "
 "importiert werden."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_format_processing_download"
 msgid "The processing of format \"%(format)s\" is only allowed for downloads."
 msgstr ""
 "Eine Verarbeitung ist beim Format „%(format)s“ nur für Downloads zulässig."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_format_processing_required"
 msgid "The download format \"%(format)s\" requires a processing."
 msgstr ""
-"Für das Download-Format „%(format)s“ muss eine Verarbeitung angegeben werden."
+"Für das Download-Format „%(format)s“ muss eine Verarbeitung angegeben "
+"werden."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_format_unique"
 msgid ""
 "A format with the BTF parameters \"%(btf)s\" already exists (format "
@@ -590,26 +663,146 @@ msgstr ""
 "Ein Format mit der BTF-Angabe „%(btf)s“ existiert bereits (Format "
 "„%(format)s“)."
 
+#, python-format
+msgctxt "model:ir.message,text:msg_keyring_missing"
+msgid "EBICS connection \"%(configuration)s\" has no keys."
+msgstr "Der EBICS-Zugang „%(configuration)s“ hat keine Schlüssel."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_keyring_unreadable"
+msgid ""
+"The keys of EBICS connection \"%(configuration)s\" cannot be loaded (wrong "
+"passphrase?)."
+msgstr ""
+"Die Schlüssel des EBICS-Zugangs „%(configuration)s“ können nicht geladen "
+"werden (Passphrase falsch?)."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_letter_not_sent"
+msgid ""
+"The initialisation letter %(order_type)s of EBICS connection "
+"\"%(configuration)s\" can only be printed after the bank accepted "
+"%(order_type)s."
+msgstr ""
+"Der Initialisierungsbrief %(order_type)s des EBICS-Zugangs "
+"„%(configuration)s“ kann erst gedruckt werden, wenn die Bank %(order_type)s "
+"angenommen hat."
+
+#, python-format
 msgctxt "model:ir.message,text:msg_log_copy"
 msgid "Records of \"%(model)s\" cannot be copied."
 msgstr "Datensätze von „%(model)s“ können nicht kopiert werden."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_log_create"
 msgid "Records of \"%(model)s\" are created only by the EBICS orders."
 msgstr ""
 "Datensätze von „%(model)s“ werden nur von den EBICS-Aufträgen angelegt."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_log_delete"
 msgid "Records of \"%(model)s\" cannot be deleted."
 msgstr "Datensätze von „%(model)s“ können nicht gelöscht werden."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_log_write"
 msgid "Records of \"%(model)s\" cannot be changed."
 msgstr "Datensätze von „%(model)s“ können nicht geändert werden."
 
+#, python-format
 msgctxt "model:ir.message,text:msg_log_write_fields"
 msgid "The fields \"%(fields)s\" of \"%(model)s\" cannot be changed."
 msgstr "Die Felder „%(fields)s“ von „%(model)s“ können nicht geändert werden."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_order_ebics_error"
+msgid ""
+"EBICS error in %(order_type)s of connection \"%(configuration)s\": %(code)s "
+"%(symbol)s: %(text)s"
+msgstr ""
+"EBICS-Fehler bei %(order_type)s des Zugangs „%(configuration)s“: %(code)s "
+"%(symbol)s: %(text)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_order_failed"
+msgid ""
+"The order %(order_type)s of EBICS connection \"%(configuration)s\" failed: "
+"%(error)s"
+msgstr ""
+"Der Auftrag %(order_type)s des EBICS-Zugangs „%(configuration)s“ ist "
+"fehlgeschlagen: %(error)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_order_running"
+msgid ""
+"Another EBICS order of connection \"%(configuration)s\" is running. Please "
+"try again later."
+msgstr ""
+"Für den EBICS-Zugang „%(configuration)s“ läuft bereits ein anderer EBICS-"
+"Auftrag. Bitte später erneut versuchen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_order_user_state"
+msgid ""
+"The bank refused %(order_type)s of EBICS connection \"%(configuration)s\": "
+"the participant is not in the state \"new\" at the bank (already initialised"
+" or locked)."
+msgstr ""
+"Die Bank hat %(order_type)s des EBICS-Zugangs „%(configuration)s“ abgelehnt:"
+" Der Teilnehmer ist bei der Bank nicht im Zustand „neu“ (bereits "
+"initialisiert oder gesperrt)."
+
+msgctxt "model:ir.message,text:msg_passphrase_missing"
+msgid ""
+"The passphrase of the EBICS keys is missing in the section [account_ebics] "
+"of trytond.conf (or the environment variable "
+"TRYTOND_ACCOUNT_EBICS__PASSPHRASE)."
+msgstr ""
+"Die Passphrase der EBICS-Schlüssel fehlt im Abschnitt [account_ebics] der "
+"trytond.conf (oder in der Umgebungsvariablen "
+"TRYTOND_ACCOUNT_EBICS__PASSPHRASE)."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_reset_not_confirmed"
+msgid ""
+"Please confirm the deletion of the keys of EBICS connection "
+"\"%(configuration)s\"."
+msgstr ""
+"Bitte das Löschen der Schlüssel des EBICS-Zugangs „%(configuration)s“ "
+"bestätigen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_transport_error"
+msgid ""
+"The connection to the bank failed for EBICS connection "
+"\"%(configuration)s\": %(error)s"
+msgstr ""
+"Die Verbindung zur Bank ist für den EBICS-Zugang „%(configuration)s“ "
+"fehlgeschlagen: %(error)s"
+
+msgctxt "model:ir.model.button,string:configuration_generate_keys_button"
+msgid "Generate Keys"
+msgstr "Schlüssel erzeugen"
+
+msgctxt "model:ir.model.button,string:configuration_print_hia_letter_button"
+msgid "HIA Letter"
+msgstr "HIA-Brief"
+
+msgctxt "model:ir.model.button,string:configuration_print_ini_letter_button"
+msgid "INI Letter"
+msgstr "INI-Brief"
+
+msgctxt "model:ir.model.button,string:configuration_reset_draft_button"
+msgid "Reset to Draft"
+msgstr "Auf Entwurf zurücksetzen"
+
+msgctxt "model:ir.model.button,string:configuration_send_hia_button"
+msgid "Send HIA"
+msgstr "HIA senden"
+
+msgctxt "model:ir.model.button,string:configuration_send_ini_button"
+msgid "Send INI"
+msgstr "INI senden"
 
 msgctxt "model:ir.rule.group,name:rule_group_account_companies"
 msgid "User in companies"
@@ -662,6 +855,177 @@ msgstr "EBICS-Benutzer"
 msgctxt "model:res.group,name:group_ebics_admin"
 msgid "EBICS Administration"
 msgstr "EBICS-Administrator"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Authentication"
+msgstr "Authentifikation"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "BIC"
+msgstr "BIC"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Bank"
+msgstr "Bank"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Certificate (PEM)"
+msgstr "Zertifikat (PEM)"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Company"
+msgstr "Firma"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Date"
+msgstr "Datum"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Encryption"
+msgstr "Verschlüsselung"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Hash value (SHA-256)"
+msgstr "Hashwert (SHA-256)"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Host ID"
+msgstr "Host-ID"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "I hereby confirm the above public key(s) for my electronic signature."
+msgstr ""
+"Ich bestätige hiermit den/die obigen öffentlichen Schlüssel für meine "
+"elektronische Unterschrift."
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Initialisation letter HIA"
+msgstr "Initialisierungsbrief HIA"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Partner ID"
+msgstr "Kunden-ID"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Place, date"
+msgstr "Ort, Datum"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Please sign this letter and send it to your bank."
+msgstr ""
+"Bitte unterschreiben Sie diesen Brief und senden Sie ihn an Ihre Bank."
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Public keys for authentication and encryption"
+msgstr "Öffentliche Schlüssel für Authentifikation und Verschlüsselung"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Purpose"
+msgstr "Verwendungszweck"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Signature of the participant"
+msgstr "Unterschrift des Teilnehmers"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Time"
+msgstr "Uhrzeit"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "User ID"
+msgstr "Teilnehmer-ID"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "User name"
+msgstr "Benutzername"
+
+msgctxt "report:account.ebics.ini_letter_hia:"
+msgid "Version"
+msgstr "Verfahren"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "BIC"
+msgstr "BIC"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Bank"
+msgstr "Bank"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Bank-technical signature"
+msgstr "Bankfachliche Unterschrift"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Certificate (PEM)"
+msgstr "Zertifikat (PEM)"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Company"
+msgstr "Firma"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Date"
+msgstr "Datum"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Hash value (SHA-256)"
+msgstr "Hashwert (SHA-256)"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Host ID"
+msgstr "Host-ID"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "I hereby confirm the above public key(s) for my electronic signature."
+msgstr ""
+"Ich bestätige hiermit den/die obigen öffentlichen Schlüssel für meine "
+"elektronische Unterschrift."
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Initialisation letter INI"
+msgstr "Initialisierungsbrief INI"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Partner ID"
+msgstr "Kunden-ID"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Place, date"
+msgstr "Ort, Datum"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Please sign this letter and send it to your bank."
+msgstr ""
+"Bitte unterschreiben Sie diesen Brief und senden Sie ihn an Ihre Bank."
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Public key for the bank-technical electronic signature"
+msgstr ""
+"Öffentlicher Schlüssel für die bankfachliche elektronische Unterschrift"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Purpose"
+msgstr "Verwendungszweck"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Signature of the participant"
+msgstr "Unterschrift des Teilnehmers"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Time"
+msgstr "Uhrzeit"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "User ID"
+msgstr "Teilnehmer-ID"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "User name"
+msgstr "Benutzername"
+
+msgctxt "report:account.ebics.ini_letter_ini:"
+msgid "Version"
+msgstr "Verfahren"
 
 msgctxt "selection:account.ebics.configuration,ebics_version:"
 msgid "EBICS 3.0 (H005)"
@@ -795,6 +1159,34 @@ msgctxt "selection:account.ebics.log.file,state:"
 msgid "Unknown Account"
 msgstr "Unbekanntes Konto"
 
+msgctxt "view:account.ebics.configuration.reset_draft.start:"
+msgid ""
+"Afterwards generate the keys, send INI and HIA and print new initialisation "
+"letters."
+msgstr ""
+"Danach Schlüssel erzeugen, INI und HIA senden und neue "
+"Initialisierungsbriefe drucken."
+
+msgctxt "view:account.ebics.configuration.reset_draft.start:"
+msgid ""
+"The bank still knows the old keys. It must reset the participant or create "
+"it again before new keys can be sent."
+msgstr ""
+"Die Bank kennt weiterhin die alten Schlüssel. Sie muss den Teilnehmer "
+"zurücksetzen oder neu anlegen, bevor neue Schlüssel gesendet werden können."
+
+msgctxt "view:account.ebics.configuration.reset_draft.start:"
+msgid "The log is kept."
+msgstr "Das Protokoll bleibt erhalten."
+
+msgctxt "view:account.ebics.configuration.reset_draft.start:"
+msgid ""
+"The private keys of this connection will be deleted for good. There is no "
+"backup."
+msgstr ""
+"Die privaten Schlüssel dieses Zugangs werden endgültig gelöscht. Eine "
+"Sicherung gibt es nicht."
+
 msgctxt "view:account.ebics.configuration:"
 msgid "Access"
 msgstr "Zugang"
@@ -834,3 +1226,11 @@ msgstr "Rückgabe"
 msgctxt "view:account.ebics.log:"
 msgid "Time"
 msgstr "Uhrzeit"
+
+msgctxt "wizard_button:account.ebics.configuration.reset_draft,start,end:"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "wizard_button:account.ebics.configuration.reset_draft,start,reset:"
+msgid "Reset"
+msgstr "Zurücksetzen"

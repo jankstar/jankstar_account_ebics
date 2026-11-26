@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<tryton>
+    <data>
+        <!-- Initialisation letters (specification ch. 6.3, working paper
+             E06 ch. 4.3): defined like report_invoice of account_invoice,
+             without fixed output format (decision F5) -->
+        <record model="ir.action.report" id="report_ini_letter_ini">
+            <field name="name">INI Letter</field>
+            <field name="model">account.ebics.configuration</field>
+            <field name="report_name">account.ebics.ini_letter_ini</field>
+            <field name="report">account_ebics/report/ini_letter_ini.fodt</field>
+            <field name="single" eval="True"/>
+        </record>
+        <record model="ir.action.keyword" id="report_ini_letter_ini_keyword">
+            <field name="keyword">form_print</field>
+            <field name="model">account.ebics.configuration,-1</field>
+            <field name="action" ref="report_ini_letter_ini"/>
+        </record>
+        <record model="ir.action-res.group" id="report_ini_letter_ini_group_ebics_admin">
+            <field name="action" ref="report_ini_letter_ini"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+
+        <record model="ir.action.report" id="report_ini_letter_hia">
+            <field name="name">HIA Letter</field>
+            <field name="model">account.ebics.configuration</field>
+            <field name="report_name">account.ebics.ini_letter_hia</field>
+            <field name="report">account_ebics/report/ini_letter_hia.fodt</field>
+            <field name="single" eval="True"/>
+        </record>
+        <record model="ir.action.keyword" id="report_ini_letter_hia_keyword">
+            <field name="keyword">form_print</field>
+            <field name="model">account.ebics.configuration,-1</field>
+            <field name="action" ref="report_ini_letter_hia"/>
+        </record>
+        <record model="ir.action-res.group" id="report_ini_letter_hia_group_ebics_admin">
+            <field name="action" ref="report_ini_letter_hia"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+    </data>
+</tryton>

@@ -62,4 +62,12 @@ copyright notices and license terms. -->
             <field name="logs" colspan="4"/>
         </page>
     </notebook>
+    <group col="-1" colspan="4" id="buttons">
+        <button name="reset_draft" icon="tryton-clear"/>
+        <button name="print_ini_letter" icon="tryton-print"/>
+        <button name="print_hia_letter" icon="tryton-print"/>
+        <button name="generate_keys" icon="tryton-launch"/>
+        <button name="send_ini" icon="tryton-forward"/>
+        <button name="send_hia" icon="tryton-forward"/>
+    </group>
 </form>

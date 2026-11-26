@@ -28,9 +28,13 @@ In development, not yet usable with a bank. Available so far:
   * HTTPS transport with TLS verification always on;
   * client for HEV, INI, HIA, HPB and BTD download with receipt.
 
-Not yet available: the connection of the protocol layer to Tryton
-(initialisation, bank keys, statement download and import) and payment
-upload (BTU).
+* Initialisation, first part: generate the keys, send INI and HIA, print
+  the initialisation letters, reset to draft (EBICS administrator only).
+  The passphrase of the keys and the connection values are read from
+  ``trytond.conf``, see ``doc/configuration.rst``.
+
+Not yet available: bank keys (HPB), statement download and import, and
+payment upload (BTU).
 
 Dependencies
 ************

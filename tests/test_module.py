@@ -1,24 +1,38 @@
 # This file is part of the account_ebics module for Tryton.
 # The COPYRIGHT file at the top level of this repository contains the full
 # copyright notices and license terms.
+import contextlib
 import datetime
 import hashlib
+import io
 import math
+import threading
+import unittest
 import warnings
+import zipfile
 from decimal import Decimal
 from unittest.mock import patch
 
-from trytond import backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.x509.oid import NameOID
+
+from trytond import backend, config
 from trytond.exceptions import UserError
-from trytond.model.exceptions import AccessError
+from trytond.model.exceptions import AccessButtonError, AccessError
 from trytond.modules.account.tests import create_chart
-from trytond.modules.account_ebics.tests import camt_generator
+from trytond.modules.account_ebics.protocol import keys
+from trytond.modules.account_ebics.protocol.exceptions import (
+    EbicsTransportError)
+from trytond.modules.account_ebics.tests import camt_generator, fake_bank
+from trytond.modules.account_ebics.tests.test_protocol import (
+    cached_bank_keyring, cached_keyring)
 from trytond.modules.company.tests import (
     CompanyTestMixin, create_company, set_company)
 from trytond.modules.currency.tests import add_currency_rate, create_currency
 from trytond.pool import Pool
+from trytond.pyson import Eval
 from trytond.tests.test_tryton import DB_NAME, ModuleTestCase, with_transaction
-from trytond.transaction import Transaction
+from trytond.transaction import Transaction, without_check_access
 
 # Test data only: invented bank, invented IBAN with valid check digits
 # (bank code 12345678 does not exist), invented EBICS participant.
@@ -139,6 +153,62 @@ def backdate(Model, records,
         cursor.execute(*table.update(
                 [table.create_date], [timestamp],
                 where=table.id.in_(ids)))
+
+
+# E06: passphrase of the tests only (test data)
+TEST_PASSPHRASE = 'Testpassphrase E06 (Testdaten)'
+
+
+@contextlib.contextmanager
+def ebics_settings(**values):
+    """Set values of [account_ebics] in the configuration for the block;
+    None clears a value (an empty value counts as missing)"""
+    section = 'account_ebics'
+    if not config.has_section(section):
+        config.add_section(section)
+    old = {n: config.get(section, n) for n in values}
+    for name, value in values.items():
+        config.set(section, name, '' if value is None else str(value))
+    try:
+        yield
+    finally:
+        for name, value in old.items():
+            config.set(section, name, '' if value is None else value)
+
+
+class OrderTransport:
+    """Transport to the simulated bank; errors: list of exceptions raised
+    instead of the next requests (None: deliver)"""
+
+    def __init__(self, bank, errors=None, before=None):
+        self.bank = bank
+        self.errors = list(errors or [])
+        self.before = before
+        self.requests = []
+
+    def post(self, data):
+        self.requests.append(bytes(data))
+        if self.before:
+            self.before()
+        if self.errors:
+            error = self.errors.pop(0)
+            if error is not None:
+                raise error
+        return self.bank.handle(bytes(data))
+
+
+def commit():
+    """Commit the test transaction: the orders run in a transaction of
+    their own and see only committed data (PostgreSQL); a new snapshot
+    shows their changes afterwards"""
+    transaction = Transaction()
+    transaction.commit()
+    transaction.cache.clear()
+
+
+def payload_members(data):
+    with zipfile.ZipFile(io.BytesIO(data)) as container:
+        return {n: container.read(n) for n in container.namelist()}
 
 
 class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
@@ -1254,6 +1324,590 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
             Account.delete([account])
             self.assertEqual(
                 Account.search([('active', 'in', [True, False])]), [])
+
+    # E06: keys, INI, HIA, initialisation letters
+
+    def new_connection(self, user_id='TESTUSER', **values):
+        "Company and connection in draft (invented participant)"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        company = create_company()
+        with set_company(company):
+            configuration, = Configuration.create([configuration_values(
+                        company, user_id=user_id, **values)])
+        return company, configuration
+
+    @contextlib.contextmanager
+    def bank_connection(self, transport):
+        "The connection talks to the simulated bank through transport"
+        Configuration = Pool().get('account.ebics.configuration')
+        with patch.object(Configuration, '_ebics_transport',
+                    lambda self: transport), \
+                ebics_settings(passphrase=TEST_PASSPHRASE):
+            yield
+
+    def generated(self, configuration):
+        "Generate the keys with the cached test keyring (fast)"
+        Configuration = Pool().get('account.ebics.configuration')
+        with patch.object(keys, 'generate_keyring',
+                    return_value=cached_keyring()), \
+                ebics_settings(passphrase=TEST_PASSPHRASE):
+            Configuration.generate_keys([configuration])
+
+    def read(self, configuration, *names):
+        Configuration = Pool().get('account.ebics.configuration')
+        values, = Configuration.read([configuration.id], list(names))
+        return tuple(values[n] for n in names)
+
+    def logs(self, configuration):
+        Log = Pool().get('account.ebics.log')
+        return Log.search([('configuration', '=', configuration.id)],
+            order=[('id', 'ASC')])
+
+    def assertUserError(self, func, expected):
+        with self.assertRaises(UserError) as cm:
+            func()
+        self.assertIn(expected, str(cm.exception))
+        return cm.exception
+
+    # E06 T1
+    @with_transaction()
+    def test_generate_keys(self):
+        "Three key pairs, hash values, container, state, access data locked"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        company, configuration = self.new_connection(user_id='T1USER')
+        with ebics_settings(passphrase=None):
+            self.assertUserError(
+                lambda: Configuration.generate_keys([configuration]),
+                'passphrase')
+        self.assertEqual(
+            self.read(configuration, 'state', 'user_a006_hash'),
+            ('draft', None))
+        with without_check_access():
+            self.assertFalse(Configuration(configuration.id).keyring_data)
+
+        with ebics_settings(passphrase=TEST_PASSPHRASE):
+            Configuration.generate_keys([configuration])
+        configuration = Configuration(configuration.id)
+        self.assertEqual(configuration.state, 'keys_generated')
+        self.assertFalse(configuration.ini_sent)
+        self.assertFalse(configuration.hia_sent)
+        with without_check_access():
+            data = Configuration(configuration.id).keyring_data
+        keyring = keys.load_keyring(data, TEST_PASSPHRASE)
+        parts = keys.public_parts(keyring)
+        for purpose in keys.PURPOSES:
+            with self.subTest(purpose=purpose):
+                value = getattr(
+                    configuration, 'user_%s_hash' % purpose.lower())
+                self.assertRegex(value, r'^[0-9A-F]{64}$')
+                self.assertEqual(value, parts[purpose]['hash'])
+                self.assertEqual(parts[purpose]['bits'], 2048)
+                subject = keyring.certificate(purpose).subject
+                self.assertEqual(
+                    subject.get_attributes_for_oid(
+                        NameOID.COMMON_NAME)[0].value, 'T1USER')
+                self.assertEqual(
+                    subject.get_attributes_for_oid(
+                        NameOID.ORGANIZATION_NAME)[0].value,
+                    company.party.name)
+        self.assertEqual(len({configuration.user_a006_hash,
+                    configuration.user_x002_hash,
+                    configuration.user_e002_hash}), 3)
+        with self.assertRaises(Exception):
+            keys.load_keyring(data, 'wrong passphrase')
+        # the passphrase is not stored in the database
+        self.assertNotIn(TEST_PASSPHRASE.encode(), bytes(data))
+        # access data readonly from keys_generated (spec. ch. 5.1)
+        for name in ['company', 'url', 'host_id', 'partner_id', 'user_id',
+                'key_bitlength']:
+            with self.subTest(field=name):
+                states = Configuration._fields[name].states
+                self.assertIn('readonly', states)
+        # again only from draft: nothing changes in keys_generated
+        hashes = self.read(configuration, 'user_a006_hash')
+        with ebics_settings(passphrase=TEST_PASSPHRASE):
+            Configuration.generate_keys([configuration])
+        self.assertEqual(self.read(configuration, 'user_a006_hash'), hashes)
+
+    # E06 T1
+    def test_generate_keys_invalid_ids(self):
+        "Invalid EBICS identifiers are refused before the keys"
+        def action():
+            Configuration = Pool().get('account.ebics.configuration')
+            company, configuration = self.new_connection(
+                user_id='WITH SPACE')
+            with ebics_settings(passphrase=TEST_PASSPHRASE):
+                Configuration.generate_keys([configuration])
+        self.assertRejected('ids', action, 'user_id')
+
+    # E06 T2
+    @with_transaction()
+    def test_send_ini_hia(self):
+        "INI, then HIA against the simulated bank: flags, state ini_sent"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        transport = OrderTransport(bank)
+        Configuration = Pool().get('account.ebics.configuration')
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        commit()
+        with self.bank_connection(transport):
+            Configuration.send_ini([configuration])
+            commit()
+            self.assertEqual(
+                self.read(configuration, 'state', 'ini_sent', 'hia_sent'),
+                ('keys_generated', True, False))
+            Configuration.send_hia([configuration])
+            commit()
+        self.assertEqual(
+            self.read(configuration, 'state', 'ini_sent', 'hia_sent'),
+            ('ini_sent', True, True))
+        self.assertEqual([r[0] for r in bank.received], ['INI', 'HIA'])
+        participant = bank.participants[('TESTPARTNER', 'TESTUSER')]
+        self.assertEqual(participant.state, fake_bank.READY)
+        self.assertEqual(bank.received[0][1]['hashes']['A006'],
+            self.read(configuration, 'user_a006_hash')[0])
+        logs = self.logs(configuration)
+        self.assertEqual(
+            [(log.order_type, log.state, log.technical_return_code,
+                log.business_return_code) for log in logs],
+            [('INI', 'done', '000000', '000000'),
+                ('HIA', 'done', '000000', '000000')])
+        self.assertTrue(all(log.ebics_order_id for log in logs))
+        members = payload_members(logs[0].payload)
+        self.assertEqual(sorted(members), ['request.xml', 'response.xml'])
+        self.assertEqual(members['request.xml'], transport.requests[0])
+        # nothing to send any more
+        with self.bank_connection(transport):
+            Configuration.send_ini([configuration])
+        self.assertEqual(len(transport.requests), 2)
+
+    # E06 T2
+    @with_transaction()
+    def test_send_hia_ini(self):
+        "HIA, then INI: also state ini_sent"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        Configuration = Pool().get('account.ebics.configuration')
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        commit()
+        with self.bank_connection(OrderTransport(bank)):
+            Configuration.send_hia([configuration])
+            commit()
+            self.assertEqual(self.read(configuration, 'state', 'hia_sent'),
+                ('keys_generated', True))
+            Configuration.send_ini([configuration])
+            commit()
+        self.assertEqual(self.read(configuration, 'state'), ('ini_sent',))
+        self.assertEqual([r[0] for r in bank.received], ['HIA', 'INI'])
+
+    # E06 T3
+    @with_transaction()
+    def test_send_hia_retry(self):
+        "HIA fails after INI: only HIA again, INI not sent again"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        transport = OrderTransport(bank, errors=[
+                None, EbicsTransportError("Timeout with 127.0.0.1")])
+        Configuration = Pool().get('account.ebics.configuration')
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        commit()
+        with self.bank_connection(transport):
+            Configuration.send_ini([configuration])
+            commit()
+            self.assertUserError(
+                lambda: Configuration.send_hia([configuration]),
+                'Timeout with 127.0.0.1')
+            Transaction().rollback()
+            self.assertEqual(
+                self.read(configuration, 'state', 'ini_sent', 'hia_sent'),
+                ('keys_generated', True, False))
+            Configuration.send_hia([configuration])
+            commit()
+        self.assertEqual(self.read(configuration, 'state'), ('ini_sent',))
+        self.assertEqual([r[0] for r in bank.received], ['INI', 'HIA'])
+        self.assertEqual(
+            [(l.order_type, l.state) for l in self.logs(configuration)],
+            [('INI', 'done'), ('HIA', 'error'), ('HIA', 'done')])
+
+    # E06 T4
+    @with_transaction()
+    def test_order_log_own_transaction(self):
+        """The log of a failed order is committed in the transaction of the
+        order (F3), without private keys or passphrase"""
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        # INI accepted, then the bank knows the participant: INI -> 091002
+        bank.participant('TESTPARTNER', 'TESTUSER').state = fake_bank.READY
+        Configuration = Pool().get('account.ebics.configuration')
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        commit()
+        with self.bank_connection(OrderTransport(bank)):
+            self.assertUserError(
+                lambda: Configuration.send_ini([configuration]),
+                'not in the state "new"')
+        # the request transaction is rolled back, the log stays
+        Transaction().rollback()
+        log, = self.logs(configuration)
+        self.assertEqual(
+            (log.order_type, log.state, log.technical_return_code),
+            ('INI', 'error', '091002'))
+        self.assertIn('EBICS_INVALID_USER_OR_USER_STATE', log.return_message)
+        self.assertEqual(self.read(configuration, 'ini_sent'), (False,))
+        private = [
+            cached_keyring().private_key(p).private_bytes(
+                serialization.Encoding.DER,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption())
+            for p in keys.PURPOSES]
+        members = payload_members(log.payload)
+        for data in [bytes(log.payload)] + list(members.values()):
+            self.assertNotIn(TEST_PASSPHRASE.encode(), data)
+            self.assertNotIn(b'PRIVATE KEY', data)
+            for der in private:
+                self.assertNotIn(der, data)
+        for name in ['return_message', 'technical_return_code',
+                'business_return_code', 'ebics_order_id']:
+            self.assertNotIn(TEST_PASSPHRASE, getattr(log, name) or '')
+
+    # E06 T4, decision F11
+    @unittest.skipUnless(backend.name == 'postgresql',
+        "advisory and row locks only with PostgreSQL")
+    @with_transaction()
+    def test_order_lock_postgresql(self):
+        """During the order the connection is locked by an advisory lock,
+        not by a row lock: another transaction can take FOR KEY SHARE (the
+        foreign key check of a log) but not the order lock; a second order
+        is refused; the log is also kept on error"""
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        commit()
+        seen = {}
+
+        def during_order():
+            # another transaction while the order is running
+            with Transaction().new_transaction() as other:
+                cursor = other.connection.cursor()
+                # the lock of a foreign key check (python-sql has no
+                # KEY SHARE)
+                cursor.execute(
+                    'SELECT id FROM "%s" WHERE id = %%s '
+                    'FOR KEY SHARE NOWAIT' % Configuration._table,
+                    (configuration.id,))
+                seen['key_share'] = cursor.fetchall()
+                current = Configuration(configuration.id)
+                try:
+                    Configuration._lock_order(current)
+                except UserError as exception:
+                    seen['lock'] = str(exception)
+                # a log in another transaction is not blocked
+                Pool().get('account.ebics.log').record(
+                    current, 'HEV', {'state': 'done'})
+                other.commit()
+
+        transport = OrderTransport(bank, errors=[
+                EbicsTransportError("Connection to 127.0.0.1 failed")],
+            before=during_order)
+        with self.bank_connection(transport):
+            done = threading.Event()
+            errors = []
+
+            def run():
+                try:
+                    with Transaction().start(DB_NAME, 1) as transaction, \
+                            without_check_access():
+                        try:
+                            Configuration.send_ini(
+                                [Configuration(configuration.id)])
+                        except UserError as exception:
+                            errors.append(str(exception))
+                        transaction.rollback()
+                finally:
+                    done.set()
+            thread = threading.Thread(target=run, daemon=True)
+            thread.start()
+            # a blocked foreign key check would hang here
+            self.assertTrue(done.wait(60), "The order hangs")
+            thread.join(10)
+        self.assertEqual(seen['key_share'], [(configuration.id,)])
+        self.assertIn('is running', seen['lock'])
+        self.assertEqual(len(errors), 1)
+        self.assertIn('Connection to 127.0.0.1 failed', errors[0])
+        commit()
+        self.assertEqual(
+            [(l.order_type, l.state) for l in self.logs(configuration)],
+            [('HEV', 'done'), ('INI', 'error')])
+
+        # a second order while the lock is held is refused
+        with Transaction().new_transaction() as other:
+            Configuration._lock_order(configuration)
+            with self.bank_connection(OrderTransport(bank)):
+                self.assertUserError(
+                    lambda: Configuration.send_ini([configuration]),
+                    'is running')
+            other.rollback()
+        self.assertEqual(len(self.logs(configuration)), 2)
+
+    # E06 T5
+    @with_transaction()
+    def test_order_messages(self):
+        "Messages: transport error, wrong and missing passphrase"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        Configuration = Pool().get('account.ebics.configuration')
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        commit()
+        transport = OrderTransport(bank, errors=[
+                EbicsTransportError("TLS error with 127.0.0.1")])
+        with self.bank_connection(transport):
+            exception = self.assertUserError(
+                lambda: Configuration.send_hia([configuration]),
+                'The connection to the bank failed')
+            self.assertIn('TLS error with 127.0.0.1', str(exception))
+            Transaction().rollback()
+            with ebics_settings(passphrase='wrong passphrase'):
+                exception = self.assertUserError(
+                    lambda: Configuration.send_hia([configuration]),
+                    'cannot be loaded (wrong passphrase?)')
+                self.assertNotIn('wrong passphrase"', str(exception))
+            with ebics_settings(passphrase=None):
+                self.assertUserError(
+                    lambda: Configuration.send_hia([configuration]),
+                    'passphrase')
+        # only the order with transport error has a log
+        log, = self.logs(configuration)
+        self.assertEqual((log.order_type, log.state), ('HIA', 'error'))
+        self.assertIn('EbicsTransportError', log.return_message)
+        self.assertEqual(sorted(payload_members(log.payload)),
+            ['request.xml'])
+        self.assertEqual(len(transport.requests), 1)
+
+    # E06 T5
+    @with_transaction()
+    def test_order_messages_codes(self):
+        "Other return codes: EBICS error with code, symbol and text"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        Configuration = Pool().get('account.ebics.configuration')
+        _, configuration = self.new_connection(host_id='OTHERHOST')
+        self.generated(configuration)
+        commit()
+        bank.host_id = 'TESTHOST'
+        with self.bank_connection(OrderTransport(bank)):
+            # unknown host: the simulated bank answers 091002 as well
+            self.assertUserError(
+                lambda: Configuration.send_ini([configuration]),
+                'not in the state "new"')
+        with patch.object(fake_bank.FakeBank, '_unsecured',
+                lambda self, root: self._key_management_response(
+                    '000000', '091201')):
+            with self.bank_connection(OrderTransport(bank)):
+                exception = self.assertUserError(
+                    lambda: Configuration.send_ini([configuration]),
+                    'EBICS error in INI')
+        self.assertIn('091201', str(exception))
+        self.assertIn('EBICS_KEYMGMT_UNSUPPORTED_VERSION_SIGNATURE',
+            str(exception))
+        self.assertNotIn('EBICS_OK', str(exception))
+
+    # E06 T6
+    @with_transaction()
+    def test_letters(self):
+        "Initialisation letters: header, certificates, hash value groups"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        IniLetter = pool.get('account.ebics.ini_letter_ini', type='report')
+        HiaLetter = pool.get('account.ebics.ini_letter_hia', type='report')
+        Bank = pool.get('bank')
+        Party = pool.get('party.party')
+        bank_party, = Party.create([{'name': "Testbank (Testdaten)"}])
+        bank_record, = Bank.create([{
+                    'party': bank_party.id, 'bic': 'TESTDEFFXXX'}])
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        _, configuration = self.new_connection(
+            name="Letter test", bank=bank_record.id)
+        self.generated(configuration)
+        commit()
+        with ebics_settings(passphrase=TEST_PASSPHRASE):
+            self.assertUserError(
+                lambda: IniLetter.execute([configuration.id], {}),
+                'can only be printed after the bank accepted INI')
+        with self.bank_connection(OrderTransport(bank)):
+            Configuration.send_ini([configuration])
+            commit()
+            extension, content, _, name = IniLetter.execute(
+                [configuration.id], {})
+            self.assertUserError(
+                lambda: HiaLetter.execute([configuration.id], {}),
+                'can only be printed after the bank accepted HIA')
+            Configuration.send_hia([configuration])
+            commit()
+            _, hia_content, _, _ = HiaLetter.execute([configuration.id], {})
+        # template .fodt, output OpenDocument (no fixed format, F5)
+        self.assertEqual(extension, 'odt')
+        self.assertEqual(name, 'INI Letter-Letter test')
+
+        def document(data):
+            with zipfile.ZipFile(io.BytesIO(bytes(data))) as container:
+                return container.read('content.xml').decode('utf-8')
+        text = document(content)
+        hia = document(hia_content)
+        for value in ['Letter test', 'TESTHOST', 'TESTPARTNER', 'TESTUSER',
+                'Testbank (Testdaten)', 'TESTDEFFXXX',
+                '-----BEGIN CERTIFICATE-----', 'Bank-technical signature',
+                'Signature of the participant']:
+            with self.subTest(value=value):
+                self.assertIn(value, text)
+        log = self.logs(configuration)[0]
+        self.assertIn(log.timestamp.strftime('%H:%M:%S'), text)
+        for purpose, document in [('A006', text), ('X002', hia),
+                ('E002', hia)]:
+            with self.subTest(purpose=purpose):
+                value = cached_keyring().certificate(purpose)
+                hash_ = keys.certificate_hash(value)
+                lines = [' '.join(hash_[i:i + 2] for i in range(j, j + 32, 2))
+                    for j in (0, 32)]
+                for line in lines:
+                    self.assertRegex(line, r'^([0-9A-F]{2} ){15}[0-9A-F]{2}$')
+                    self.assertIn('>%s<' % line, document)
+                pem = value.public_bytes(
+                    serialization.Encoding.PEM).decode('ascii')
+                self.assertIn(pem.splitlines()[1], document)
+        self.assertNotIn('A006', hia.replace('ini_letter', ''))
+        for value in ['Authentication', 'Encryption', 'X002', 'E002']:
+            self.assertIn(value, hia)
+        self.assertNotIn(TEST_PASSPHRASE, text + hia)
+        self.assertNotIn('PRIVATE KEY', text + hia)
+
+    def test_format_hash(self):
+        "Groups of two hexadecimal characters, 16 per line (F6)"
+        from trytond.modules.account_ebics.connection.configuration import (
+            format_hash)
+        value = ''.join('%02X' % i for i in range(32))
+        self.assertEqual(format_hash(value), [
+                '00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F',
+                '10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F'])
+        self.assertEqual(format_hash(None), [])
+
+    # E06 T7
+    @with_transaction()
+    def test_reset_draft(self):
+        "Dialog: without confirmation refused; with it draft, keys deleted"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        ResetDraft = pool.get(
+            'account.ebics.configuration.reset_draft', type='wizard')
+        ModelLog = pool.get('ir.model.log')
+        _, configuration = self.new_connection()
+        self.generated(configuration)
+        log = create_log(configuration.company, configuration)
+        with Transaction().set_context(
+                active_model='account.ebics.configuration',
+                active_id=configuration.id,
+                active_ids=[configuration.id]):
+            session_id, _, _ = ResetDraft.create()
+            wizard = ResetDraft(session_id)
+            defaults = wizard.default_start(None)
+            self.assertEqual(defaults, {
+                    'name': "Test access", 'host_id': 'TESTHOST',
+                    'partner_id': 'TESTPARTNER', 'user_id': 'TESTUSER',
+                    'confirm': False})
+            button = dict(
+                (b.state, b) for b in ResetDraft.start.buttons)['reset']
+            self.assertEqual(button.states['readonly'].pyson(), (
+                    ~Eval('confirm', False)).pyson())
+            # the server checks the confirmation
+            wizard.start.confirm = False
+            self.assertUserError(wizard.transition_reset, 'Please confirm')
+            self.assertEqual(self.read(configuration, 'state'),
+                ('keys_generated',))
+            wizard.start.confirm = True
+            self.assertEqual(wizard.transition_reset(), 'end')
+            ResetDraft.delete(session_id)
+        configuration = Configuration(configuration.id)
+        self.assertEqual(configuration.state, 'draft')
+        for name in ['user_a006_hash', 'user_x002_hash', 'user_e002_hash',
+                'bank_x002_hash', 'bank_e002_hash']:
+            self.assertIsNone(getattr(configuration, name))
+        self.assertFalse(configuration.ini_sent)
+        self.assertFalse(configuration.hia_sent)
+        with without_check_access():
+            self.assertFalse(Configuration(configuration.id).keyring_data)
+            self.assertFalse(Configuration(configuration.id).bank_keys_data)
+        # the log is kept, the change is in ir.model.log
+        self.assertEqual(self.logs(configuration), [log])
+        Transaction()._store_log_records()
+        entries = ModelLog.search([
+                ('resource', '=', str(configuration)),
+                ('event', '=', 'write'),
+                ])
+        self.assertTrue(any('state' in (e.target or '') for e in entries))
+        # new keys are possible again
+        self.generated(configuration)
+        self.assertEqual(self.read(configuration, 'state'),
+            ('keys_generated',))
+
+    # E06 T8
+    @with_transaction()
+    def test_button_access(self):
+        "Buttons, dialog and letters only for the EBICS administrator"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        Button = pool.get('ir.model.button')
+        ActionReport = pool.get('ir.action.report')
+        ActionWizard = pool.get('ir.action.wizard')
+        ModelData = pool.get('ir.model.data')
+        admin_group = ModelData.get_id('account_ebics', 'group_ebics_admin')
+        company, configuration = self.new_connection()
+        names = ['generate_keys', 'send_ini', 'send_hia', 'reset_draft',
+            'print_ini_letter', 'print_hia_letter']
+        self.assertEqual(sorted(names), sorted(
+                b.name for b in Button.search([
+                        ('model', '=', 'account.ebics.configuration')])))
+        for name in names:
+            with self.subTest(button=name):
+                self.assertEqual(
+                    Button.get_groups('account.ebics.configuration', name),
+                    {admin_group})
+        for report in ['account.ebics.ini_letter_ini',
+                'account.ebics.ini_letter_hia']:
+            action, = ActionReport.search([('report_name', '=', report)])
+            self.assertEqual([g.id for g in action.groups], [admin_group])
+            self.assertFalse(action.extension)
+            self.assertTrue(action.single)
+        action, = ActionWizard.search([
+                ('wiz_name', '=', 'account.ebics.configuration.reset_draft')])
+        self.assertEqual([g.id for g in action.groups], [admin_group])
+
+        user = create_user('ebics_user_e06', company, ['group_ebics'])
+        admin = create_user('ebics_admin_e06', company, ['group_ebics_admin'])
+        set_user, set_context = as_user(user)
+        with set_user, set_context, \
+                ebics_settings(passphrase=TEST_PASSPHRASE):
+            for name in ['generate_keys', 'send_ini', 'send_hia']:
+                with self.subTest(button=name, user='group_ebics'):
+                    with self.assertRaises(AccessButtonError):
+                        getattr(Configuration, name)([configuration])
+        set_user, set_context = as_user(admin)
+        with set_user, set_context:
+            # not visible in draft: refused by the server
+            with self.assertRaises(AccessButtonError):
+                Configuration.send_ini([configuration])
+            with patch.object(keys, 'generate_keyring',
+                        return_value=cached_keyring()), \
+                    ebics_settings(passphrase=TEST_PASSPHRASE):
+                Configuration.generate_keys([configuration])
+            with self.assertRaises(AccessButtonError):
+                Configuration.generate_keys([configuration])
+            # key fields still without field access (D8)
+            for name in ['keyring_data', 'keyring_data_id']:
+                with self.assertRaises(AccessError):
+                    Configuration.read([configuration.id], [name])
+        self.assertEqual(self.read(configuration, 'state'),
+            ('keys_generated',))
 
 
 del ModuleTestCase
