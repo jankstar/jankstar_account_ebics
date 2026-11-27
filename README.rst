@@ -39,7 +39,17 @@ In development, not yet usable with a bank. Available so far:
 
 * Download of statements (BTD): button, menu, cron (inactive by default)
   and a dialog to fetch a period again; the files are stored in the EBICS
-  log and acknowledged after the commit.
+  log and acknowledged after the commit. A result page shows the outcome
+  per connection and format.
+* Every download writes a run log (*Runs*) with each step as text, also
+  for the cron started automatically or manually; the EBICS log shows who
+  or what started an order.
+* Received files that were received before (same content) are marked as
+  repeated with a reference to the first one; the copy/duplicate
+  indicator of the bank (``CpyDplctInd``) is shown.
+
+The menus are under *Financial › Electronic Banking (EBICS)* (operation)
+and *Financial › Configuration › Electronic Banking (EBICS)* (settings).
 
 Not yet available: import of the statements, and payment upload (BTU).
 
@@ -49,6 +59,8 @@ Dependencies
 * Tryton 8.0 modules: ``company``, ``party``, ``bank``, ``account``,
   ``account_statement``, ``account_statement_sepa``.
 * Python 3.10 to 3.13 with ``cryptography``, ``lxml`` and ``requests``.
+* Database: PostgreSQL in production; SQLite only for development and
+  tests.
 
 Tests
 *****
@@ -61,8 +73,13 @@ bank:
     TRYTOND_CONFIG=/dev/null TRYTOND_DATABASE_URI=sqlite:// DB_NAME=:memory: \
         python -m unittest discover -s tests
 
-* ``tests/test_module.py``: models, checks, access rights and the import
-  of a generated camt.053 statement.
+To run them against PostgreSQL, set ``TRYTOND_DATABASE_URI`` to the
+server and ``DB_NAME`` to a test database; a few tests about locking run
+only there.
+
+* ``tests/test_module.py``: models, checks, access rights, the orders
+  INI, HIA, HPB and BTD against the simulated bank, and the import of a
+  generated camt.053 statement.
 * ``tests/test_protocol.py``: protocol layer against a simulated bank
   (``tests/fake_bank.py``), without network.
 * ``tests/test_testserver.py``: local test server, started in the test
@@ -78,8 +95,10 @@ Local test server
 ``tools/ebics_testserver.py`` acts as a bank on the development computer.
 It listens on ``https://127.0.0.1:8443/ebics`` with host ID ``TESTBANK``,
 supports HEV, INI, HIA, HPB and BTD with receipt and provides invented
-camt.053 statements. It is meant for tests by hand without a real bank
-and uses test data only. See ``tools/README.md`` (German).
+camt.053 statements. A web page (``/admin``, with an access token per
+start) shows the messages and runs the commands, e.g. a change of the
+bank keys (``rotate-bank-keys``). It is meant for tests by hand without a
+real bank and uses test data only. See ``tools/README.md`` (German).
 
 The directory ``tools/`` is part of the repository but not of the
 installed package.
