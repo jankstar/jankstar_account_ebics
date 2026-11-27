@@ -9,5 +9,9 @@ copyright notices and license terms. -->
     <field name="message_type"/>
     <field name="iban" expand="1"/>
     <field name="account" expand="1"/>
+    <field name="copy_duplicate" optional="1"/>
+    <field name="repeated"/>
+    <field name="first_received" widget="date" string="First Received"/>
+    <field name="first_received" widget="time" string="First Received Time"/>
     <field name="state"/>
 </tree>

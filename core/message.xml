@@ -138,5 +138,87 @@ copyright notices and license terms. -->
         <record model="ir.message" id="msg_reactivate_no_bank_keys">
             <field name="text">EBICS connection "%(configuration)s" cannot be reactivated without confirmed bank keys.</field>
         </record>
+
+        <!-- Download of statements (working paper E08) -->
+        <record model="ir.message" id="msg_fetch_files">
+            <field name="text">%(configuration)s, %(format)s: %(count)s file(s) received, of them %(repeated)s repeated.</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_no_data">
+            <field name="text">%(configuration)s, %(format)s: no new data.</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_error">
+            <field name="text">%(configuration)s, %(format)s: %(error)s</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_receipt_failed">
+            <field name="text">%(configuration)s, %(format)s: %(count)s file(s) received (of them %(repeated)s repeated) and stored, but the receipt failed (%(error)s). The bank will deliver the data again.</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_not_active">
+            <field name="text">EBICS connection "%(configuration)s" is not active; no statements are fetched.</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_no_formats">
+            <field name="text">EBICS connection "%(configuration)s" has no formats to fetch.</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_none">
+            <field name="text">There is no active EBICS connection for the current companies.</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_period_format">
+            <field name="text">Format "%(format)s" is not a format of EBICS connection "%(configuration)s".</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_period_dates">
+            <field name="text">The start date must not be after the end date and the end date not after today.</field>
+        </record>
+        <record model="ir.message" id="msg_fetch_summary">
+            <field name="text">%(files)s file(s) received, of them %(repeated)s repeated, %(no_data)s format(s) without new data, %(errors)s error(s).</field>
+        </record>
+
+        <!-- Run log of the downloads (27.11.2026) -->
+        <record model="ir.message" id="msg_run_started">
+            <field name="text">Run started: %(trigger)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_cron">
+            <field name="text">cron %(cron)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_user">
+            <field name="text">user %(user)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_no_company">
+            <field name="text">No company in the context of the cron: add the companies in the cron.</field>
+        </record>
+        <record model="ir.message" id="msg_run_company">
+            <field name="text">Company %(company)s: %(count)s active EBICS connection(s)</field>
+        </record>
+        <record model="ir.message" id="msg_run_connections">
+            <field name="text">%(count)s EBICS connection(s) to fetch: %(configurations)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_skipped">
+            <field name="text">EBICS connection "%(configuration)s" skipped: state %(state)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_connection">
+            <field name="text">EBICS connection "%(configuration)s": formats %(formats)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_request">
+            <field name="text">%(configuration)s, %(format)s: BTD request %(btf)s%(period)s sent</field>
+        </record>
+        <record model="ir.message" id="msg_run_stored">
+            <field name="text">%(configuration)s, %(format)s: %(count)s file(s) received, of them %(repeated)s repeated (%(segments)s segment(s)), stored in EBICS log %(log)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_receipt">
+            <field name="text">%(configuration)s, %(format)s: positive receipt sent, answer of the bank %(code)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_formats_skipped">
+            <field name="text">%(configuration)s: remaining formats skipped: %(formats)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_last_fetch">
+            <field name="text">%(configuration)s: last fetch set</field>
+        </record>
+        <record model="ir.message" id="msg_run_with_log">
+            <field name="text">%(text)s (EBICS log %(log)s)</field>
+        </record>
+        <record model="ir.message" id="msg_run_finished">
+            <field name="text">Run finished: %(summary)s</field>
+        </record>
+        <record model="ir.message" id="msg_run_aborted">
+            <field name="text">Run aborted by an unexpected error: %(error)s</field>
+        </record>
     </data>
 </tryton>

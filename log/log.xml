@@ -60,6 +60,19 @@ copyright notices and license terms. -->
             <field name="view" ref="log_file_view_form"/>
             <field name="act_window" ref="act_log_file_form"/>
         </record>
+        <!-- tabs: all files and the repeated ones (F11 of E08) -->
+        <record model="ir.action.act_window.domain" id="act_log_file_form_domain_all">
+            <field name="name">All</field>
+            <field name="sequence" eval="10"/>
+            <field name="domain"></field>
+            <field name="act_window" ref="act_log_file_form"/>
+        </record>
+        <record model="ir.action.act_window.domain" id="act_log_file_form_domain_repeated">
+            <field name="name">Repeated</field>
+            <field name="sequence" eval="20"/>
+            <field name="domain" eval="[('repeated', '=', True)]" pyson="1"/>
+            <field name="act_window" ref="act_log_file_form"/>
+        </record>
         <menuitem
             parent="menu_ebics"
             action="act_log_file_form"

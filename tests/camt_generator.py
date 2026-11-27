@@ -118,7 +118,8 @@ def make_entries(count, rnd, start=1):
 
 
 def make_camt053(iban, date=None, entries=5, currency='EUR',
-        start_balance=Decimal('1000.00'), sequence=1, seed=None):
+        start_balance=Decimal('1000.00'), sequence=1, seed=None,
+        copy_duplicate=None):
     """Return (file name, data) of an invented camt.053.001.08 statement
     for the IBAN and the booking date.
 
@@ -126,7 +127,8 @@ def make_camt053(iban, date=None, entries=5, currency='EUR',
     balance CLBD (booking date); TxsSummry with the number and the net
     sum; credits and debits with remittance information and an invented
     counterparty with a valid IBAN; Stmt/Id and MsgId unique (date and
-    random part). seed makes the output reproducible.
+    random part). seed makes the output reproducible. copy_duplicate:
+    optional Stmt/CpyDplctInd (COPY, DUPL or CODU; E08.1 F12).
 
     Source: working paper E12 ch. 4.6; specification account_ebics ch. 7.2
     (ISO 20022 version 2019, camt.053.001.08)."""
@@ -167,6 +169,11 @@ def make_camt053(iban, date=None, entries=5, currency='EUR',
             date, datetime.time(0, 0)).isoformat())
     _sub(period, 'ToDtTm', datetime.datetime.combine(
             date, datetime.time(23, 59, 59)).isoformat())
+    if copy_duplicate:
+        # schema order: after FrToDt, before Acct (camt.053.001.08)
+        if copy_duplicate not in {'COPY', 'DUPL', 'CODU'}:
+            raise ValueError("Invalid CpyDplctInd")
+        _sub(statement, 'CpyDplctInd', copy_duplicate)
     account = _sub(statement, 'Acct')
     _sub(_sub(account, 'Id'), 'IBAN', iban)
     _sub(account, 'Ccy', currency)

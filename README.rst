@@ -37,8 +37,11 @@ In development, not yet usable with a bank. Available so far:
   values with the information of the bank and confirm them, suspend and
   reactivate the connection.
 
-Not yet available: statement download and import, and payment upload
-(BTU).
+* Download of statements (BTD): button, menu, cron (inactive by default)
+  and a dialog to fetch a period again; the files are stored in the EBICS
+  log and acknowledged after the commit.
+
+Not yet available: import of the statements, and payment upload (BTU).
 
 Dependencies
 ************

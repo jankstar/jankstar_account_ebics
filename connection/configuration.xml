@@ -237,6 +237,22 @@ copyright notices and license terms. -->
             <field name="group" ref="group_ebics_admin"/>
         </record>
 
+        <!-- Button "Fetch Statements" for both EBICS groups (working paper
+             E08 ch. 4.1) -->
+        <record model="ir.model.button" id="configuration_download_statements_button">
+            <field name="model">account.ebics.configuration</field>
+            <field name="name">download_statements</field>
+            <field name="string">Fetch Statements</field>
+        </record>
+        <record model="ir.model.button-res.group" id="configuration_download_statements_button_group_ebics">
+            <field name="button" ref="configuration_download_statements_button"/>
+            <field name="group" ref="group_ebics"/>
+        </record>
+        <record model="ir.model.button-res.group" id="configuration_download_statements_button_group_ebics_admin">
+            <field name="button" ref="configuration_download_statements_button"/>
+            <field name="group" ref="group_ebics_admin"/>
+        </record>
+
         <record model="ir.rule.group" id="rule_group_configuration_companies">
             <field name="name">User in companies</field>
             <field name="model">account.ebics.configuration</field>

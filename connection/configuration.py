@@ -1,10 +1,12 @@
 # This file is part of the account_ebics module for Tryton.
 # The COPYRIGHT file at the top level of this repository contains the full
 # copyright notices and license terms.
+import contextlib
 import datetime
 import hashlib
 import io
 import json
+import logging
 import re
 import zipfile
 
@@ -28,6 +30,21 @@ from ..protocol import xml as ebics_xml
 from ..protocol.exceptions import (
     EbicsError, EbicsKeyringError, EbicsTransportError)
 from ..protocol.transport import HttpsTransport
+
+logger = logging.getLogger(__name__)
+
+
+class _NoRecorder:
+    "Without run log (e.g. direct calls in tests)"
+    trigger = None
+    run_id = None
+
+    def step(self, text, error=False):
+        pass
+
+    def outcome(self, outcome):
+        pass
+
 
 STATES = [
     ('draft', "Draft"),
@@ -219,6 +236,41 @@ def overall_check(checks):
     return 'no_expected'
 
 
+def statement_info(data):
+    """(message type, IBAN, CpyDplctInd) of a received file: the message
+    type from the XML namespace (e.g. camt.053.001.08, specification
+    ch. 7.2); the IBAN (Acct/Id/IBAN) and the copy/duplicate indicator of
+    the bank (CpyDplctInd: COPY, DUPL, CODU; F12 of E08) of the first block
+    Stmt (camt.053), Rpt (camt.052) or Ntfctn (camt.054); parsed with the
+    central parser (ch. 8.4), independent of the namespace version; None
+    for what is missing or not readable"""
+    try:
+        root = ebics_xml.parse(data, max_size=None)
+    except EbicsError:
+        return None, None, None
+    namespace = ebics_xml.etree.QName(root).namespace or ''
+    match = re.search(r'([a-z]{4}\.\d{3}\.\d{3}\.\d{2})$', namespace)
+    message_type = match.group(1) if match else None
+    iban = copy_duplicate = None
+    if namespace:
+        for kind in ['Stmt', 'Rpt', 'Ntfctn']:
+            block = root.find('./*/{%s}%s' % (namespace, kind))
+            if block is None:
+                continue
+            node = block.find('{%(ns)s}Acct/{%(ns)s}Id/{%(ns)s}IBAN'
+                % {'ns': namespace})
+            if node is not None and node.text:
+                iban = node.text.strip()
+            node = block.find('{%s}CpyDplctInd' % namespace)
+            if node is not None and node.text:
+                value = node.text.strip().upper()
+                # ISO 20022 CopyDuplicate1Code
+                copy_duplicate = (value if value in {'COPY', 'DUPL', 'CODU'}
+                    else None)
+            break
+    return message_type, iban, copy_duplicate
+
+
 def normalize_hash(value):
     "Remove all white space and return upper case, None for empty"
     if not value:
@@ -312,6 +364,7 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
     last_fetch = fields.DateTime("Last Fetch", readonly=True)
     state = fields.Selection(
         STATES, "State", required=True, readonly=True, sort=False)
+    state_string = state.translated('state')
     # E07.1 (F9): state before the fall back to bank_keys_received, the
     # state after the confirmation; empty means active (also for the
     # records before E07.1, no migration needed)
@@ -380,6 +433,11 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
                     },
                 'reactivate': {
                     'invisible': Eval('state') != 'suspended',
+                    'depends': ['state'],
+                    },
+                # working paper E08 ch. 4.1
+                'download_statements': {
+                    'invisible': Eval('state') != 'active',
                     'depends': ['state'],
                     },
                 })
@@ -557,7 +615,7 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
             max_response_size=setting_int(
                 'max_response_size', ebics_xml.DEFAULT_MAX_SIZE))
 
-    def _ebics_client(self, keyring):
+    def _ebics_client(self, keyring, bank_keys=None):
         try:
             connection = client.Connection(
                 self.host_id, self.partner_id, self.user_id, self.url)
@@ -573,10 +631,17 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
                     error=str(exception))) from None
         try:
             return client.EbicsClient(
-                connection, keyring, transport,
+                connection, keyring, transport, bank_keys=bank_keys,
                 xsd_dir=setting('xsd_dir'), xsd_mode=setting('xsd_mode'),
                 max_response_size=setting_int(
-                    'max_response_size', ebics_xml.DEFAULT_MAX_SIZE))
+                    'max_response_size', ebics_xml.DEFAULT_MAX_SIZE),
+                # download limits (specification ch. 12, from E08)
+                max_zip_files=setting_int(
+                    'max_zip_files', client.DEFAULT_MAX_ZIP_FILES),
+                max_zip_size=setting_int(
+                    'max_zip_size', client.DEFAULT_MAX_ZIP_SIZE),
+                max_segments=setting_int(
+                    'max_segments', client.DEFAULT_MAX_SEGMENTS))
         except ValueError:
             raise UserError(gettext(
                     'account_ebics.msg_configuration_setting',
@@ -741,6 +806,9 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
             'state': 'done',
             'payload': payload(result),
             }
+        if result is not None and result.warnings:
+            # schema warnings (xsd_mode warn) and others (F4 of E08)
+            values['warnings'] = '\n'.join(result.warnings)
         if result is not None:
             values.update({
                     'technical_return_code': (
@@ -758,6 +826,14 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
         elif result is None or not result.ok:
             values['state'] = 'error'
         return values
+
+    def _order_error_message(self, order_type, result, error):
+        "Text of the message of a failed order, None if it succeeded"
+        try:
+            self._raise_order_error(order_type, result, error)
+        except UserError as exception:
+            return exception.message
+        return None
 
     def _raise_order_error(self, order_type, result, error):
         "UserError after a failed order (working paper E06 ch. 4.5)"
@@ -907,6 +983,313 @@ class Configuration(HistoryMixin, ModelSQL, ModelView):
         self.__class__.notify_user(
             [self], icon, gettext(
                 'account_ebics.' + message, configuration=self.rec_name))
+
+    # Download of statements (working paper E08)
+
+    @classmethod
+    @ModelView.button_action('account_ebics.wizard_fetch_statements')
+    def download_statements(cls, configurations):
+        """Button "Fetch Statements": the dialog of the menu fetches the
+        connections at once and shows the result (variant C, 27.11.2026)"""
+        pass
+
+    @classmethod
+    def fetch_statements(cls):
+        """Cron: all active connections of the company of the context; no
+        notification; every step in the run log and the Python logger
+        (F5; run log by request of the user, 27.11.2026)"""
+        pool = Pool()
+        Run = pool.get('account.ebics.run')
+        Company = pool.get('company.company')
+        transaction = Transaction()
+        company = transaction.context.get('company')
+        # the scheduler runs as root (user 0), "Run Once" as the user
+        trigger = 'cron' if transaction.user == 0 else 'cron_manual'
+        cron = transaction.context.get('ebics_cron')
+        with Run.recording(trigger, company=company, cron=cron) as recorder:
+            if not company:
+                recorder.step(gettext('account_ebics.msg_run_no_company'),
+                    error=True)
+                recorder.finish()
+                return
+            with without_check_access():
+                company_name = Company(company).rec_name
+                configurations = cls.search([('company', '=', company)])
+            active = [c for c in configurations if c.state == 'active']
+            recorder.step(gettext(
+                    'account_ebics.msg_run_company', company=company_name,
+                    count=len(active)))
+            for configuration in configurations:
+                if configuration.state != 'active':
+                    recorder.step(gettext(
+                            'account_ebics.msg_run_skipped',
+                            configuration=configuration.rec_name,
+                            state=configuration.state_string))
+            outcomes = cls.fetch(active, cron=True, recorder=recorder)
+            recorder.finish(cls.summary(outcomes))
+
+    @classmethod
+    def summary(cls, outcomes):
+        "Text of the counts of a run"
+        files = sum(o['files'] or 0 for o in outcomes)
+        repeated = sum(o.get('repeated') or 0 for o in outcomes)
+        no_data = sum(o['state'] == 'no_data' for o in outcomes)
+        errors = sum(o['state'] in {'error', 'skipped'} for o in outcomes)
+        return gettext('account_ebics.msg_fetch_summary',
+            files=files, repeated=repeated, no_data=no_data, errors=errors)
+
+    @classmethod
+    def fetch(cls, configurations, format_=None, date_range=None,
+            cron=False, recorder=None):
+        """Download per connection and format (working paper E08 ch. 4.2);
+        return the outcomes: dicts with configuration_id, configuration,
+        format, state (done, no_data, error, skipped), files, message,
+        log_id. recorder: the run log (log/run.py) that gets every step."""
+        outcomes = []
+        for configuration in configurations:
+            outcomes.extend(configuration._fetch(
+                    format_=format_, date_range=date_range, cron=cron,
+                    recorder=recorder))
+        return outcomes
+
+    def _outcome(self, format_, state, message=None, files=0, log_id=None,
+            repeated=0):
+        return {
+            'configuration_id': self.id,
+            'configuration': self.rec_name,
+            'format': format_.rec_name if format_ else '-',
+            'state': state,
+            'message': message,
+            'files': files,
+            # F11 of E08: files received before
+            'repeated': repeated,
+            'log_id': log_id,
+            }
+
+    @contextlib.contextmanager
+    def _order_lock_transaction(self):
+        """Advisory lock of the connection held over download and receipt
+        (F2 of E08): lock_id is a lock of a transaction, so it lives in a
+        transaction of its own that changes nothing and holds no row lock;
+        the transactions of the download (A) and of the receipt (B) run
+        inside it and commit on their own; the lock ends with this
+        transaction (D27)"""
+        with Transaction().new_transaction() as transaction:
+            try:
+                self._lock_order(self)
+                yield
+            finally:
+                transaction.rollback()
+
+    def _fetch(self, format_=None, date_range=None, cron=False,
+            recorder=None):
+        "All (or one) formats of the connection"
+        recorder = recorder or _NoRecorder()
+        formats = [format_] if format_ else [
+            f for f in self.formats if f.active]
+        if self.state != 'active':
+            outcome = self._outcome(
+                None, 'skipped', gettext(
+                    'account_ebics.msg_fetch_not_active',
+                    configuration=self.rec_name))
+            recorder.outcome(outcome)
+            return [outcome]
+        if not formats:
+            outcome = self._outcome(
+                None, 'error', gettext(
+                    'account_ebics.msg_fetch_no_formats',
+                    configuration=self.rec_name))
+            recorder.outcome(outcome)
+            return [outcome]
+        recorder.step(gettext(
+                'account_ebics.msg_run_connection',
+                configuration=self.rec_name,
+                formats=', '.join(f.rec_name for f in formats)))
+        try:
+            keyring = self._load_keyring()
+            ebics = self._ebics_client(keyring, self.bank_keys())
+            with self._order_lock_transaction():
+                outcomes = []
+                for fmt in formats:
+                    outcome, stop = self._fetch_format(
+                        ebics, fmt, date_range, cron, recorder)
+                    outcomes.append(outcome)
+                    if outcome['state'] != 'done':
+                        # done: stored and receipt are steps already
+                        recorder.outcome(outcome)
+                    if stop:
+                        # 091008: the remaining formats are skipped
+                        skipped = formats[len(outcomes):]
+                        if skipped:
+                            recorder.step(gettext(
+                                    'account_ebics.msg_run_formats_skipped',
+                                    configuration=self.rec_name,
+                                    formats=', '.join(
+                                        f.rec_name for f in skipped)))
+                        break
+                if (date_range is None and len(outcomes) == len(formats)
+                        and all(o['state'] in {'done', 'no_data'}
+                            for o in outcomes)):
+                    with Transaction().new_transaction(), \
+                            without_check_access():
+                        self.__class__(self.id)._write_internal({
+                                'last_fetch': datetime.datetime.now(),
+                                })
+                    recorder.step(gettext(
+                            'account_ebics.msg_run_last_fetch',
+                            configuration=self.rec_name))
+                return outcomes
+        except UserError as exception:
+            # passphrase, keys, settings, lock: nothing was sent
+            outcome = self._outcome(None, 'error', exception.message)
+            recorder.outcome(outcome)
+            return [outcome]
+
+    @staticmethod
+    def _btf(format_):
+        return client.Btf(
+            format_.service_name, format_.msg_name, scope=format_.scope,
+            service_option=format_.service_option,
+            msg_version=format_.msg_version,
+            container=format_.container or None)
+
+    def _fetch_format(self, ebics, format_, date_range, cron,
+            recorder=None):
+        """Transaction A (download, log, files, commit), then the positive
+        receipt and transaction B (receipt in the log); D5, F8: no negative
+        receipt, no receipt after an error. Return (outcome, stop)."""
+        pool = Pool()
+        Log = pool.get('account.ebics.log')
+        recorder = recorder or _NoRecorder()
+        error = None
+        recorder.step(gettext(
+                'account_ebics.msg_run_request',
+                configuration=self.rec_name, format=format_.rec_name,
+                btf=format_.btf_text,
+                period=(' %s – %s' % date_range) if date_range else ''))
+        with Transaction().new_transaction(), without_check_access():
+            configuration = self.__class__(self.id)
+            if configuration.state != 'active':
+                return self._outcome(format_, 'skipped', gettext(
+                        'account_ebics.msg_fetch_not_active',
+                        configuration=self.rec_name)), True
+            try:
+                result = ebics.btd_download(
+                    self._btf(format_), date_range)
+            except EbicsError as exception:
+                error = exception
+                result = getattr(exception, 'result', None)
+            no_data = (error is None
+                and result.klass == returncodes.NO_DATA)
+            if no_data and cron:
+                # F3: no EBICS log of an empty run of the cron; the run log
+                # has the step
+                return self._outcome(format_, 'no_data', gettext(
+                        'account_ebics.msg_fetch_no_data',
+                        configuration=self.rec_name,
+                        format=format_.rec_name)), False
+            ok = error is None and result.ok and not no_data
+            values = configuration._log_values(result, error)
+            values.update({
+                    'format': format_.id,
+                    'date_from': date_range[0] if date_range else None,
+                    'date_to': date_range[1] if date_range else None,
+                    'transaction_id': getattr(
+                        result, 'transaction_id', None),
+                    'num_segments': getattr(result, 'num_segments', None),
+                    # F7: the received container, not the requests
+                    'payload': result.container if ok else None,
+                    'trigger': recorder.trigger,
+                    'run': recorder.run_id,
+                    })
+            if no_data:
+                values['state'] = 'no_data'
+            files = []
+            if ok:
+                state = ('pending' if format_.processing == 'import_statement'
+                    else 'stored')
+                for name, data in result.files:
+                    message_type, iban, copy_duplicate = statement_info(
+                        data)
+                    files.append({
+                            'name': name,
+                            'data': data,
+                            'message_type': message_type,
+                            'iban': iban,
+                            'copy_duplicate': copy_duplicate,
+                            'state': state,
+                            })
+            log = Log.record(configuration, 'BTD', values, files=files)
+            log_id = log.id
+            # F11: files received before (same content, same company)
+            repeated = sum(1 for f in log.files if f.first_file)
+            stop = False
+            if not ok and not no_data:
+                stop = configuration._check_bank_keys_update(result)
+        # transaction A is committed here (D5)
+        if no_data:
+            return self._outcome(format_, 'no_data', gettext(
+                    'account_ebics.msg_fetch_no_data',
+                    configuration=self.rec_name,
+                    format=format_.rec_name), log_id=log_id), False
+        if not ok:
+            message = self._order_error_message('BTD', result, error)
+            return self._outcome(format_, 'error', gettext(
+                    'account_ebics.msg_fetch_error',
+                    configuration=self.rec_name, format=format_.rec_name,
+                    error=message), log_id=log_id), stop
+        # D5: stored and committed before the receipt
+        recorder.step(gettext(
+                'account_ebics.msg_run_stored',
+                configuration=self.rec_name, format=format_.rec_name,
+                count=len(files), repeated=repeated,
+                segments=result.num_segments, log=log_id))
+        receipt_error = None
+        try:
+            receipt = ebics.btd_receipt(result.transaction_id, True)
+            if receipt.receipt != 'positive':
+                receipt_error = self._order_error_message(
+                    'BTD', receipt, None) or (
+                    receipt.technical.code if receipt.technical else '-')
+        except EbicsError as exception:
+            receipt_error = str(exception)
+        if receipt_error is None:
+            # transaction B: the receipt in the log (PR03)
+            with Transaction().new_transaction(), without_check_access():
+                Log.write_internal([Log(log_id)], {'receipt': 'positive'})
+            recorder.step(gettext(
+                    'account_ebics.msg_run_receipt',
+                    configuration=self.rec_name, format=format_.rec_name,
+                    code=receipt.technical.code))
+            return self._outcome(format_, 'done', gettext(
+                    'account_ebics.msg_fetch_files',
+                    configuration=self.rec_name, format=format_.rec_name,
+                    count=len(files), repeated=repeated), files=len(files),
+                log_id=log_id, repeated=repeated), False
+        return self._outcome(format_, 'error', gettext(
+                'account_ebics.msg_fetch_receipt_failed',
+                configuration=self.rec_name, format=format_.rec_name,
+                count=len(files), repeated=repeated, error=receipt_error),
+            files=len(files), log_id=log_id, repeated=repeated), False
+
+    @classmethod
+    def notify_outcomes(cls, outcomes):
+        """One notification per connection and format (working paper E08
+        ch. 4.4), committed in a transaction of its own"""
+        if not outcomes:
+            return
+        icons = {
+            'done': 'tryton-info',
+            'no_data': 'tryton-info',
+            'skipped': 'tryton-warning',
+            'error': 'tryton-error',
+            }
+        with Transaction().new_transaction(), without_check_access():
+            for outcome in outcomes:
+                configuration = cls(outcome['configuration_id'])
+                cls.notify_user(
+                    [configuration], icons[outcome['state']],
+                    outcome['message'] or outcome['state'])
 
     def reset_to_draft(self):
         """Delete keys, hash values, flags and bank keys; the log stays

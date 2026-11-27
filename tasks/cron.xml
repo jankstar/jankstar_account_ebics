@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<tryton>
+    <data noupdate="1">
+        <!-- Download of the statements per company (working paper E08 F6):
+             created inactive; the administrator activates it and sets the
+             interval and the companies -->
+        <record model="ir.cron" id="cron_fetch_statements">
+            <field name="method">account.ebics.configuration|fetch_statements</field>
+            <field name="interval_number" eval="1"/>
+            <field name="interval_type">hours</field>
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+</tryton>

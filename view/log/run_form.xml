@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form>
+    <label name="trigger"/>
+    <field name="trigger"/>
+    <label name="state"/>
+    <field name="state"/>
+    <label name="trigger_text"/>
+    <field name="trigger_text" colspan="3"/>
+    <label name="company"/>
+    <field name="company"/>
+    <label name="cron"/>
+    <field name="cron"/>
+    <label name="user"/>
+    <field name="user"/>
+    <newline/>
+    <label name="start"/>
+    <field name="start"/>
+    <label name="end"/>
+    <field name="end"/>
+    <label name="summary"/>
+    <field name="summary" colspan="3"/>
+    <notebook colspan="4">
+        <page name="history">
+            <field name="history" colspan="4" height="300"/>
+        </page>
+        <page name="logs">
+            <field name="logs" colspan="4"/>
+        </page>
+    </notebook>
+</form>

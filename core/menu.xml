@@ -8,7 +8,7 @@ copyright notices and license terms. -->
              accesses, released accounts). Only for EBICS administrators;
              the parent menu additionally requires group_account_admin. -->
         <menuitem
-            name="EBICS"
+            name="Electronic Banking (EBICS)"
             parent="account.menu_account_configuration"
             sequence="50"
             id="menu_ebics_configuration"
@@ -24,7 +24,7 @@ copyright notices and license terms. -->
              menu additionally requires group_account or group_account_admin.
              -->
         <menuitem
-            name="EBICS"
+            name="Electronic Banking (EBICS)"
             parent="account.menu_account"
             sequence="40"
             id="menu_ebics"/>

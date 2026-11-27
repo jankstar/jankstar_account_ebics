@@ -33,7 +33,7 @@ from trytond.modules.company.tests import (
     CompanyTestMixin, create_company, set_company)
 from trytond.modules.currency.tests import add_currency_rate, create_currency
 from trytond.pool import Pool
-from trytond.pyson import Eval
+from trytond.pyson import Eval, PYSONEncoder
 from trytond.tests.test_tryton import DB_NAME, ModuleTestCase, with_transaction
 from trytond.transaction import Transaction, without_check_access
 
@@ -157,6 +157,10 @@ def backdate(Model, records,
                 [table.create_date], [timestamp],
                 where=table.id.in_(ids)))
 
+
+# E08: BTF of the standard formats (specification ch. 5.5)
+CAMT053_BTF = client.Btf('EOP', 'camt.053', scope='DE', container='ZIP')
+CAMT052_BTF = client.Btf('STM', 'camt.052', scope='DE', container='ZIP')
 
 # E06: passphrase of the tests only (test data)
 TEST_PASSPHRASE = 'Testpassphrase E06 (Testdaten)'
@@ -1869,7 +1873,8 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
             'print_ini_letter', 'print_hia_letter',
             # E07
             'fetch_bank_keys', 'confirm_bank_keys', 'suspend', 'reactivate']
-        self.assertEqual(sorted(names), sorted(
+        # E08: download_statements for both groups (test_fetch_access)
+        self.assertEqual(sorted(names + ['download_statements']), sorted(
                 b.name for b in Button.search([
                         ('model', '=', 'account.ebics.configuration')])))
         for name in names:
@@ -2403,6 +2408,946 @@ class AccountEbicsTestCase(CompanyTestMixin, ModuleTestCase):
         self.assertEqual(
             attributes['//label[@id="stays_suspended_note"]']['invisible']
             .pyson(), (~Eval('stays_suspended', False)).pyson())
+
+    # E08: download of statements (BTD)
+
+    def provide(self, bank, iban=TEST_IBAN, date=None, entries=3,
+            btf=None, sequence=1, copy_duplicate=None):
+        "An invented camt.053 at the simulated bank (test data)"
+        name, data = camt_generator.make_camt053(
+            iban, date or datetime.date.today(), entries,
+            sequence=sequence, copy_duplicate=copy_duplicate)
+        bank.add_download(
+            btf or CAMT053_BTF, name, data, date or datetime.date.today())
+        return name, data
+
+    def fetch_wizard(self, configurations=None):
+        """The dialog Fetch Statements: from the button of the connections
+        (configurations) or from the menu (None)"""
+        FetchStatements = Pool().get(
+            'account.ebics.fetch_statements', type='wizard')
+        context = {}
+        if configurations is not None:
+            context = {
+                'active_model': 'account.ebics.configuration',
+                'active_id': configurations[0].id,
+                'active_ids': [c.id for c in configurations],
+                }
+        with Transaction().set_context(**context):
+            session_id, _, _ = FetchStatements.create()
+            return FetchStatements(session_id), context
+
+    def download(self, configuration, bank, transport=None):
+        """Button Fetch Statements against the simulated bank: the dialog
+        fetches at once and returns the values of the result page"""
+        wizard, context = self.fetch_wizard([configuration])
+        with self.bank_connection(transport or OrderTransport(bank)), \
+                Transaction().set_context(**context):
+            try:
+                self.assertEqual(wizard.transition_start(), 'fetch')
+                self.assertEqual(wizard.transition_fetch(), 'result')
+                return wizard.default_result(None)
+            finally:
+                commit()
+
+    def assertFetchError(self, result, expected):
+        "The result page shows an error with the expected text"
+        errors = [l['message'] for l in result['lines']
+            if l['state'] == 'error']
+        self.assertTrue(any(expected in e for e in errors), errors)
+        return result
+
+    def btd_logs(self, configuration):
+        return [l for l in self.logs(configuration) if l.order_type == 'BTD']
+
+    # E08 T1
+    @with_transaction()
+    def test_fetch(self):
+        "Download: log, files, receipt positive, last_fetch, notification"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        ModelData = pool.get('ir.model.data')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        # a second format with processing store
+        camt052 = ModelData.get_id('account_ebics', 'format_camt052_de')
+        Configuration.write([configuration], {
+                'formats': [('add', [camt052])]})
+        commit()
+        name, data = self.provide(bank)
+        stored_name, stored_data = self.provide(
+            bank, btf=CAMT052_BTF, sequence=2)
+        self.assertIsNone(self.read(configuration, 'last_fetch')[0])
+        transport = OrderTransport(bank)
+        result = self.download(configuration, bank, transport)
+        self.assertEqual(result['summary'],
+            '2 file(s) received, of them 0 repeated, '
+            '0 format(s) without new data, 0 error(s).')
+        self.assertEqual([(l['state'], l['files']) for l in result['lines']],
+            [('done', 1), ('done', 1)])
+        self.assertEqual(sorted(result['logs']),
+            sorted(l.id for l in self.btd_logs(configuration)))
+
+        logs = {l.btf_params: l for l in self.btd_logs(configuration)}
+        self.assertEqual(sorted(logs),
+            ['EOP/DE/camt.053/ZIP', 'STM/DE/camt.052/ZIP'])
+        log = logs['EOP/DE/camt.053/ZIP']
+        self.assertEqual(
+            (log.state, log.receipt, log.technical_return_code,
+                log.business_return_code, log.num_segments),
+            ('done', 'positive', '000000', '000000', 1))
+        self.assertRegex(log.transaction_id, r'^[0-9A-F]{32}$')
+        self.assertEqual(log.format.id, ModelData.get_id(
+                'account_ebics', 'format_camt053_de'))
+        self.assertIsNone(log.date_from)
+        with zipfile.ZipFile(io.BytesIO(bytes(log.payload))) as container:
+            self.assertEqual(container.read(name), data)
+        file_, = log.files
+        self.assertEqual(
+            (file_.name, bytes(file_.data), file_.sha256,
+                file_.message_type, file_.iban, file_.state),
+            (name, data, hashlib.sha256(data).hexdigest(),
+                'camt.053.001.08', TEST_IBAN, 'pending'))
+        stored, = logs['STM/DE/camt.052/ZIP'].files
+        self.assertEqual((stored.name, stored.state),
+            (stored_name, 'stored'))
+        # F7: requests and responses are not stored
+        self.assertNotIn(b'ebicsRequest', bytes(log.payload))
+        # the bank got the positive receipts
+        self.assertTrue(all(e['delivered'] for e in bank.files))
+        self.assertEqual([code for _, code in bank.receipts], [0, 0])
+        self.assertTrue(self.read(configuration, 'last_fetch')[0])
+        labels = self.notifications(configuration)
+        self.assertEqual(
+            sum('1 file(s) received' in l for l in labels), 2)
+        # no private key or passphrase in the log
+        for value in [bytes(log.payload), log.return_message or '',
+                log.warnings or '']:
+            value = value if isinstance(value, bytes) else value.encode()
+            self.assertNotIn(b'PRIVATE KEY', value)
+            self.assertNotIn(TEST_PASSPHRASE.encode(), value)
+
+    # E08 T2
+    @with_transaction()
+    def test_fetch_no_data(self):
+        "090005: log no_data for the button, no log for the cron (F3)"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        self.download(configuration, bank)
+        log, = self.btd_logs(configuration)
+        self.assertEqual(
+            (log.state, log.receipt, log.business_return_code),
+            ('no_data', 'none', '090005'))
+        self.assertFalse(log.files)
+        self.assertIsNone(log.payload)
+        self.assertIn('no new data', self.notifications(configuration)[-1])
+        first = self.read(configuration, 'last_fetch')[0]
+        self.assertTrue(first)
+        count = len(self.notifications(configuration))
+        with self.bank_connection(OrderTransport(bank)), \
+                Transaction().set_context(
+                    company=configuration.company.id):
+            Configuration.fetch_statements()
+        commit()
+        self.assertEqual(len(self.btd_logs(configuration)), 1)
+        self.assertEqual(len(self.notifications(configuration)), count)
+        self.assertGreaterEqual(self.read(configuration, 'last_fetch')[0],
+            first)
+
+    # E08 T3
+    @with_transaction()
+    def test_fetch_segments(self):
+        "Several segments; max_segments from trytond.conf; warnings (F4)"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        name, data = self.provide(bank, entries=40)
+        bank.segment_size = 1000
+        self.download(configuration, bank)
+        log, = self.btd_logs(configuration)
+        self.assertGreater(log.num_segments, 2)
+        self.assertEqual(log.receipt, 'positive')
+        self.assertEqual(bytes(log.files[0].data), data)
+        self.assertIsNone(log.warnings)
+
+        # the bank announces one segment more than it sends: warning
+        self.provide(bank, sequence=2)
+        bank.faults['BTD_fewer'] = True
+        self.download(configuration, bank)
+        log = self.btd_logs(configuration)[-1]
+        self.assertEqual(log.state, 'done')
+        self.assertIn('announced segments', log.warnings)
+        del bank.faults['BTD_fewer']
+
+        # max_segments: refused, no receipt, the data stay at the bank
+        self.provide(bank, entries=40, sequence=3)
+        with ebics_settings(max_segments=2):
+            self.assertFetchError(
+                self.download(configuration, bank),
+                'segments')
+        log = self.btd_logs(configuration)[-1]
+        self.assertEqual((log.state, log.receipt), ('error', 'none'))
+        self.assertFalse(log.files)
+        self.assertFalse(bank.files[-1]['delivered'])
+
+    # E08 T4
+    @with_transaction()
+    def test_fetch_receipt_after_commit(self):
+        "D5: error before the receipt keeps the log; the bank delivers again"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        name, data = self.provide(bank)
+        transport = OrderTransport(bank, errors=[
+                None, EbicsTransportError("Timeout with 127.0.0.1")])
+        self.assertFetchError(
+                self.download(configuration, bank, transport),
+                'the receipt failed')
+        log, = self.btd_logs(configuration)
+        self.assertEqual((log.state, log.receipt), ('done', 'none'))
+        self.assertEqual(bytes(log.files[0].data), data)
+        self.assertFalse(bank.files[0]['delivered'])
+        self.assertIsNone(self.read(configuration, 'last_fetch')[0])
+        # the next download delivers the same file again
+        self.download(configuration, bank)
+        again = self.btd_logs(configuration)[-1]
+        self.assertEqual((again.state, again.receipt), ('done', 'positive'))
+        self.assertEqual(again.files[0].sha256, log.files[0].sha256)
+        self.assertTrue(bank.files[0]['delivered'])
+
+    # E08 T5
+    @with_transaction()
+    def test_fetch_formats(self):
+        "An error of one format does not stop the others; 091008 stops"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        ModelData = pool.get('ir.model.data')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        Configuration.write([configuration], {
+                'formats': [('add', [ModelData.get_id(
+                                'account_ebics', 'format_camt052_de')])]})
+        commit()
+        self.provide(bank)
+        self.provide(bank, btf=CAMT052_BTF, sequence=2)
+        transport = OrderTransport(bank, errors=[
+                EbicsTransportError("Connection to 127.0.0.1 failed")])
+        self.assertFetchError(
+                self.download(configuration, bank, transport),
+                'Connection to 127.0.0.1 failed')
+        logs = self.btd_logs(configuration)
+        self.assertEqual(sorted(l.state for l in logs), ['done', 'error'])
+        self.assertIsNone(self.read(configuration, 'last_fetch')[0])
+        self.assertEqual(self.read(configuration, 'state'), ('active',))
+
+        # 091008: bank keys, the remaining format is skipped
+        bank.faults['BTD'] = '091008'
+        self.assertFetchError(
+                self.download(configuration, bank),
+                '091008 EBICS_BANK_PUBKEY_UPDATE_REQUIRED')
+        logs = self.btd_logs(configuration)
+        self.assertEqual(len(logs), 3)
+        self.assertEqual(
+            (logs[-1].state, logs[-1].technical_return_code),
+            ('error', '091008'))
+        self.assertEqual(
+            self.read(configuration, 'state', 'confirmed_state'),
+            ('bank_keys_received', 'active'))
+
+    # E08 T6, D27
+    @unittest.skipUnless(backend.name == 'postgresql',
+        "advisory and row locks only with PostgreSQL")
+    @with_transaction()
+    def test_fetch_lock_postgresql(self):
+        """The lock covers download and receipt (F2): during the receipt a
+        second download is refused, the log is visible to other
+        transactions and its row is not locked; nothing hangs"""
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        self.provide(bank)
+        seen = {}
+
+        def during_receipt():
+            if not transport.requests[-1].count(b'Receipt'):
+                return
+            with Transaction().new_transaction() as other:
+                cursor = other.connection.cursor()
+                cursor.execute(
+                    'SELECT id FROM "%s" WHERE id = %%s '
+                    'FOR KEY SHARE NOWAIT' % Configuration._table,
+                    (configuration.id,))
+                seen['key_share'] = cursor.fetchall()
+                Log = Pool().get('account.ebics.log')
+                seen['logs'] = Log.search_count([
+                        ('configuration', '=', configuration.id),
+                        ('order_type', '=', 'BTD')])
+                seen['second'] = Configuration.fetch(
+                    [Configuration(configuration.id)])
+                other.rollback()
+
+        transport = OrderTransport(bank, before=during_receipt)
+        done = threading.Event()
+        errors = []
+
+        def run():
+            try:
+                with Transaction().start(DB_NAME, 1) as transaction, \
+                        without_check_access():
+                    wizard, context = self.fetch_wizard(
+                        [Configuration(configuration.id)])
+                    with self.bank_connection(transport), \
+                            Transaction().set_context(**context):
+                        wizard.transition_start()
+                        wizard.transition_fetch()
+                        result = wizard.default_result(None)
+                    errors.extend(l['message'] for l in result['lines']
+                        if l['state'] != 'done')
+                    transaction.commit()
+            finally:
+                done.set()
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        self.assertTrue(done.wait(60), "The download hangs")
+        thread.join(10)
+        self.assertEqual(errors, [])
+        self.assertEqual(seen['key_share'], [(configuration.id,)])
+        # transaction A was committed before the receipt (D5)
+        self.assertEqual(seen['logs'], 1)
+        second, = seen['second']
+        self.assertEqual(second['state'], 'error')
+        self.assertIn('is running', second['message'])
+        commit()
+        log, = self.btd_logs(configuration)
+        self.assertEqual(log.receipt, 'positive')
+
+    # E08 T7
+    @with_transaction()
+    def test_fetch_period(self):
+        "Dialog: DateRange, checks of the dates and the format"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        FetchPeriod = pool.get('account.ebics.fetch_period', type='wizard')
+        Date = pool.get('ir.date')
+        ModelData = pool.get('ir.model.data')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        day = Date.today() - datetime.timedelta(days=3)
+        name, data = self.provide(bank, date=day)
+        self.download(configuration, bank)
+        last_fetch = self.read(configuration, 'last_fetch')[0]
+        camt053 = pool.get('account.ebics.format')(ModelData.get_id(
+                'account_ebics', 'format_camt053_de'))
+        camt052 = pool.get('account.ebics.format')(ModelData.get_id(
+                'account_ebics', 'format_camt052_de'))
+
+        def wizard(date_from, date_to, format_=camt053):
+            with Transaction().set_context(
+                    active_model='account.ebics.configuration',
+                    active_id=configuration.id,
+                    active_ids=[configuration.id]):
+                session_id, _, _ = FetchPeriod.create()
+                instance = FetchPeriod(session_id)
+                defaults = instance.default_start(None)
+                instance.start.configuration = Configuration(
+                    configuration.id)
+                instance.start.format = format_
+                instance.start.date_from = date_from
+                instance.start.date_to = date_to
+                return instance, defaults
+
+        # on_change of the client (as the RPC call on_change_configuration)
+        Start = pool.get('account.ebics.fetch_period.start')
+        start = Start(configuration=Configuration(configuration.id),
+            format=None)
+        start.on_change_configuration()
+        changed = start._changed_values()
+        self.assertEqual(changed['format'], camt053.id)
+        self.assertIn('formats', changed)
+        self.assertEqual([f.id for f in start.formats], [camt053.id])
+        start = Start(configuration=None, format=camt053)
+        start.on_change_configuration()
+        self.assertEqual(start._changed_values()['format'], None)
+        self.assertEqual(Start.on_change_configuration.depends,
+            {'configuration', 'format', 'formats'})
+
+        instance, defaults = wizard(day, day)
+        self.assertEqual(defaults['configuration'], configuration.id)
+        self.assertEqual(defaults['format'], camt053.id)
+        self.assertEqual(defaults['date_to'], Date.today())
+        for date_from, date_to, format_, expected in [
+                (day, day - datetime.timedelta(days=1), camt053,
+                    'must not be after'),
+                (day, Date.today() + datetime.timedelta(days=1), camt053,
+                    'must not be after'),
+                (day, day, camt052, 'is not a format')]:
+            with self.subTest(date_from=date_from, date_to=date_to):
+                instance, _ = wizard(date_from, date_to, format_)
+                self.assertUserError(instance.transition_fetch, expected)
+
+        instance, _ = wizard(day, Date.today())
+        with self.bank_connection(OrderTransport(bank)):
+            self.assertEqual(instance.transition_fetch(), 'result')
+        commit()
+        result = instance.default_result(None)
+        line, = result['lines']
+        self.assertEqual((line['state'], line['files']), ('done', 1))
+        log = self.btd_logs(configuration)[-1]
+        self.assertEqual(
+            (log.date_from, log.date_to, log.state, log.receipt),
+            (day, Date.today(), 'done', 'positive'))
+        self.assertEqual(bytes(log.files[0].data), data)
+        initialisation = [d for o, d in bank.received
+            if o == 'BTD' and d.get('phase') == 'Initialisation'][-1]
+        self.assertEqual(initialisation['date_range'],
+            (day.isoformat(), Date.today().isoformat()))
+        # a period does not change last_fetch
+        self.assertEqual(self.read(configuration, 'last_fetch')[0],
+            last_fetch)
+
+    # E08 T8
+    @with_transaction()
+    def test_fetch_state(self):
+        "Suspended and not active connections are not fetched"
+        Configuration = Pool().get('account.ebics.configuration')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        self.provide(bank)
+        Configuration.suspend([configuration])
+        commit()
+        with self.bank_connection(OrderTransport(bank)):
+            outcome, = Configuration.fetch([Configuration(configuration.id)])
+            self.assertEqual(outcome['state'], 'skipped')
+            with Transaction().set_context(
+                    company=configuration.company.id):
+                Configuration.fetch_statements()
+        commit()
+        self.assertEqual(self.btd_logs(configuration), [])
+        self.assertFalse(bank.files[0]['delivered'])
+        # the button is not available in suspended
+        admin = create_user('ebics_admin_e08_t8', configuration.company,
+            ['group_ebics_admin'])
+        set_user, set_context = as_user(admin)
+        with set_user, set_context:
+            with self.assertRaises(AccessButtonError):
+                Configuration.download_statements(
+                    [Configuration(configuration.id)])
+
+    # E08 T9
+    @with_transaction()
+    def test_fetch_access(self):
+        "Button and dialogs for both groups; cron per company, inactive"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        Button = pool.get('ir.model.button')
+        ActionWizard = pool.get('ir.action.wizard')
+        Cron = pool.get('ir.cron')
+        Menu = pool.get('ir.ui.menu')
+        ModelData = pool.get('ir.model.data')
+        groups = {ModelData.get_id('account_ebics', g)
+            for g in ['group_ebics', 'group_ebics_admin']}
+        self.assertEqual(Button.get_groups(
+                'account.ebics.configuration', 'download_statements'),
+            groups)
+        for wiz_name in ['account.ebics.fetch_statements',
+                'account.ebics.fetch_period']:
+            action, = ActionWizard.search([('wiz_name', '=', wiz_name)])
+            self.assertEqual({g.id for g in action.groups}, groups)
+        for xml_id in ['menu_fetch_statements', 'menu_fetch_period']:
+            menu = Menu(ModelData.get_id('account_ebics', xml_id))
+            self.assertEqual(menu.parent.id,
+                ModelData.get_id('account_ebics', 'menu_ebics'))
+        with Transaction().set_context(active_test=False):
+            cron, = Cron.search([
+                    ('method', '=',
+                        'account.ebics.configuration|fetch_statements')])
+        self.assertFalse(cron.active)
+        self.assertEqual((cron.interval_number, cron.interval_type),
+            (1, 'hours'))
+
+        # a user of group_ebics fetches with the button
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        self.provide(bank)
+        user = create_user('ebics_user_e08', configuration.company,
+            ['group_ebics'])
+        commit()
+        set_user, set_context = as_user(user)
+        wizard_action = ModelData.get_id(
+            'account_ebics', 'wizard_fetch_statements')
+        with set_user, set_context, \
+                self.bank_connection(OrderTransport(bank)):
+            # the button opens the dialog, which fetches at once
+            action = Configuration.download_statements(
+                [Configuration(configuration.id)])
+            self.assertEqual(action, pool.get('ir.action').get_action_id(
+                    wizard_action))
+            wizard, context = self.fetch_wizard(
+                [Configuration(configuration.id)])
+            with Transaction().set_context(**context):
+                self.assertEqual(wizard.transition_start(), 'fetch')
+                self.assertEqual(wizard.transition_fetch(), 'result')
+        commit()
+        log, = self.btd_logs(configuration)
+        self.assertEqual((log.create_uid.id, log.receipt),
+            (user.id, 'positive'))
+
+        # the menu: all active connections of the current companies
+        self.provide(bank, sequence=2)
+        FetchStatements = pool.get(
+            'account.ebics.fetch_statements', type='wizard')
+        with set_user, set_context, \
+                self.bank_connection(OrderTransport(bank)):
+            session_id, _, _ = FetchStatements.create()
+            wizard = FetchStatements(session_id)
+            # the menu shows the connections first
+            self.assertEqual(wizard.transition_start(), 'confirm')
+            confirm = wizard.default_confirm(None)
+            self.assertEqual(confirm['configurations'], [configuration.id])
+            wizard.confirm.configurations = [
+                Configuration(i) for i in confirm['configurations']]
+            self.assertEqual(wizard.transition_fetch(), 'result')
+            result = wizard.default_result(None)
+        commit()
+        self.assertEqual(len(self.btd_logs(configuration)), 2)
+        self.assertIn('1 file(s) received',
+            self.notifications(configuration)[-1])
+        self.assertEqual(result['summary'],
+            '1 file(s) received, of them 0 repeated, '
+            '0 format(s) without new data, 0 error(s).')
+        line, = result['lines']
+        self.assertEqual(
+            (line['configuration'], line['state'], line['files']),
+            (configuration.rec_name, 'done', 1))
+        new_log = self.btd_logs(configuration)[-1]
+        self.assertEqual(result['logs'], [new_log.id])
+        # "Open Log" shows the logs of this run
+        action, values = wizard.do_open_log({})
+        self.assertEqual(values, {})
+        self.assertEqual(action['pyson_domain'], PYSONEncoder().encode(
+                [('id', 'in', [new_log.id])]))
+
+        # no active connection: the button Fetch is readonly, the server
+        # refuses
+        other = create_user('ebics_user_e08_other', create_company(),
+            ['group_ebics'])
+        set_user, set_context = as_user(other)
+        with set_user, set_context:
+            session_id, _, _ = FetchStatements.create()
+            wizard = FetchStatements(session_id)
+            self.assertEqual(wizard.transition_start(), 'confirm')
+            self.assertEqual(
+                wizard.default_confirm(None)['configurations'], [])
+            wizard.confirm.configurations = []
+            self.assertUserError(wizard.transition_fetch,
+                'no active EBICS connection')
+        button = dict((b.state, b) for b in FetchStatements.confirm.buttons)
+        self.assertEqual(button['fetch'].states['readonly'].pyson(),
+            (~Eval('configurations', [])).pyson())
+
+    # E08 T10
+    @with_transaction()
+    def test_fetch_limits(self):
+        "max_zip_files and max_zip_size from trytond.conf"
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        self.provide(bank)
+        self.provide(bank, sequence=2)
+        with ebics_settings(max_zip_files=1):
+            self.assertFetchError(
+                self.download(configuration, bank),
+                'files')
+        with ebics_settings(max_zip_size=1000):
+            self.assertFetchError(
+                self.download(configuration, bank),
+                'Entschlüsselung fehlgeschlagen')
+        logs = self.btd_logs(configuration)
+        self.assertEqual([(l.state, l.receipt) for l in logs],
+            [('error', 'none'), ('error', 'none')])
+        self.assertFalse(any(e['delivered'] for e in bank.files))
+        self.download(configuration, bank)
+        self.assertEqual(len(self.btd_logs(configuration)[-1].files), 2)
+
+    def test_statement_info(self):
+        "Message type from the namespace, IBAN of the first account"
+        info = configuration_module.statement_info
+        data = camt_generator.make_camt053(TEST_IBAN, entries=1)[1]
+        self.assertEqual(info(data), ('camt.053.001.08', TEST_IBAN, None))
+        self.assertEqual(info(b'not xml'), (None, None, None))
+        self.assertEqual(info(b'<a/>'), (None, None, None))
+        self.assertEqual(info(
+                b'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:'
+                b'camt.052.001.08"><BkToCstmrAcctRpt><Rpt><Acct><Id>'
+                b'<IBAN>' + TEST_IBAN_2.encode() + b'</IBAN></Id></Acct>'
+                b'</Rpt></BkToCstmrAcctRpt></Document>'),
+            ('camt.052.001.08', TEST_IBAN_2, None))
+
+    # E08: run log (request of the user, 27.11.2026)
+
+    def runs(self, **domain):
+        Run = Pool().get('account.ebics.run')
+        return Run.search(
+            [(k, '=', v) for k, v in domain.items()],
+            order=[('id', 'ASC')])
+
+    def assertSteps(self, run, *fragments):
+        "Every fragment appears in a line of the steps, in this order"
+        lines = run.history.split('\n')
+        position = 0
+        for fragment in fragments:
+            for index in range(position, len(lines)):
+                if fragment in lines[index]:
+                    position = index + 1
+                    break
+            else:
+                self.fail('%r not in the steps after line %s:\n%s'
+                    % (fragment, position, run.history))
+        for line in lines:
+            self.assertRegex(line, r'^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d ')
+
+    @with_transaction()
+    def test_run_cron(self):
+        "Cron automatic and manual: every step as text, never empty"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        Cron = pool.get('ir.cron')
+        ModelData = pool.get('ir.model.data')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        company = configuration.company
+        with set_company(company):
+            draft, = Configuration.create([configuration_values(
+                        company, user_id='DRAFTUSER', name="Draft access")])
+        cron = Cron(ModelData.get_id('account_ebics', 'cron_fetch_statements'))
+        # "Run Once" is only possible on an active cron (Tryton standard)
+        Cron.write([cron], {
+                'companies': [('add', [company.id])],
+                'active': True,
+                })
+        commit()
+        self.provide(bank)
+
+        # automatic: the scheduler runs as root
+        with self.bank_connection(OrderTransport(bank)), \
+                self.assertLogs(
+                    'trytond.modules.account_ebics.log.run', 'INFO') as logs, \
+                Transaction().set_user(0), \
+                Transaction().set_context(
+                    company=company.id, ebics_cron=cron.id):
+            Configuration.fetch_statements()
+        commit()
+        run, = self.runs(company=company.id)
+        log, = self.btd_logs(configuration)
+        self.assertEqual(
+            (run.trigger, run.cron.id, run.user.id, run.state),
+            ('cron', cron.id, 0, 'done'))
+        self.assertIn('Cron, started automatically', run.trigger_text)
+        self.assertIn('cron %s' % cron.id, run.trigger_text)
+        self.assertEqual(run.summary,
+            '1 file(s) received, of them 0 repeated, '
+            '0 format(s) without new data, 0 error(s).')
+        self.assertTrue(run.end)
+        self.assertSteps(run,
+            'Run started: Cron, started automatically',
+            'active EBICS connection(s)',
+            'EBICS connection "Draft access" skipped: state Draft',
+            'formats Daily Statement (camt.053)',
+            'BTD request EOP/DE/camt.053/ZIP sent',
+            '1 file(s) received, of them 0 repeated (1 segment(s)), stored in '
+            'EBICS log %s' % log.id,
+            'positive receipt sent, answer of the bank 011000',
+            'last fetch set',
+            'Run finished: 1 file(s) received')
+        self.assertEqual(run.logs, (log,))
+        self.assertEqual((log.trigger, log.run.id, log.create_uid.id),
+            ('cron', run.id, 0))
+        self.assertEqual(len(logs.output), len(run.history.split('\n')))
+
+        # manual "Run Once" of the cron (only for the Tryton administrator):
+        # no data, still a full run log
+        admin = pool.get('res.user')(1)
+        set_user, set_context = as_user(admin)
+        with self.bank_connection(OrderTransport(bank)), \
+                set_user, set_context:
+            Cron.run_once([Cron(cron.id)])
+        commit()
+        run = self.runs(company=company.id)[-1]
+        self.assertEqual((run.trigger, run.cron.id, run.user.id),
+            ('cron_manual', cron.id, admin.id))
+        self.assertIn('Cron, started manually', run.trigger_text)
+        self.assertIn('user %s' % admin.rec_name, run.trigger_text)
+        self.assertSteps(run,
+            'Run started: Cron, started manually',
+            'BTD request',
+            'no new data',
+            'Run finished: 0 file(s) received, of them 0 repeated, '
+            '1 format(s) without new data')
+        # F3: no EBICS log for the empty run of the cron
+        self.assertEqual(len(self.btd_logs(configuration)), 1)
+        self.assertEqual(run.logs, ())
+        # the cron of the module stays inactive for the other tests
+        Cron.write([Cron(cron.id)], {
+                'active': False,
+                'companies': [('remove', [company.id])],
+                })
+        commit()
+
+    @with_transaction()
+    def test_run_without_connection(self):
+        "No active connection or no company: the run says so"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        company, configuration = self.new_connection()
+        commit()
+        with Transaction().set_user(0), \
+                Transaction().set_context(company=company.id):
+            Configuration.fetch_statements()
+        with Transaction().set_user(0), \
+                Transaction().set_context(company=None):
+            Configuration.fetch_statements()
+        commit()
+        run, = self.runs(company=company.id)
+        self.assertEqual(run.state, 'done')
+        self.assertSteps(run, 'Run started',
+            '0 active EBICS connection(s)',
+            'skipped: state Draft',
+            'Run finished: 0 file(s) received')
+        run = self.runs(company=None, trigger='cron')[-1]
+        self.assertEqual(run.state, 'error')
+        self.assertSteps(run, 'Run started', 'No company in the context',
+            'Run finished')
+
+    @with_transaction()
+    def test_run_dialogs(self):
+        "Button, menu and period dialog write a run with user and trigger"
+        pool = Pool()
+        Run = pool.get('account.ebics.run')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        self.provide(bank)
+        transport = OrderTransport(bank, errors=[
+                None, EbicsTransportError("Timeout with 127.0.0.1")])
+        with self.assertLogs(
+                'trytond.modules.account_ebics.log.run', 'INFO') as logs:
+            self.download(configuration, bank, transport)
+        run = Run.search([], order=[('id', 'DESC')], limit=1)[0]
+        log, = self.btd_logs(configuration)
+        self.assertEqual((run.trigger, run.user.id, run.state),
+            ('button', Transaction().user, 'error'))
+        self.assertIn('Button', run.trigger_text)
+        self.assertSteps(run, 'Run started: Button',
+            '1 EBICS connection(s) to fetch',
+            'BTD request', 'stored in EBICS log %s' % log.id,
+            'the receipt failed', 'Run finished')
+        self.assertEqual((log.trigger, log.run), ('button', run))
+        self.assertTrue(any('ERROR' in o and 'the receipt failed' in o
+                for o in logs.output))
+
+    @with_transaction()
+    def test_run_locked(self):
+        "Runs cannot be changed, created or deleted from outside"
+        pool = Pool()
+        Run = pool.get('account.ebics.run')
+        Configuration = pool.get('account.ebics.configuration')
+        company, _ = self.new_connection()
+        # the run is created in a transaction of its own (PostgreSQL)
+        commit()
+        with Transaction().set_user(0), \
+                Transaction().set_context(company=company.id):
+            Configuration.fetch_statements()
+        commit()
+        run, = self.runs(company=company.id)
+        for action in [
+                lambda: Run.write([run], {'summary': 'x'}),
+                lambda: Run.delete([run]),
+                lambda: Run.copy([run])]:
+            with self.assertRaises(AccessError):
+                with Transaction().set_context(_check_access=True):
+                    action()
+        with self.assertRaises(AccessError):
+            Run.delete([run])
+        # an unexpected error is written as last step and raised again
+        with self.assertRaises(ZeroDivisionError):
+            with Run.recording('menu', company=company.id) as recorder:
+                recorder.step('before')
+                1 / 0
+        commit()
+        run = self.runs(company=company.id)[-1]
+        self.assertEqual(run.state, 'error')
+        self.assertSteps(run, 'before',
+            'Run aborted by an unexpected error: ZeroDivisionError')
+
+    # E08.1: files received again (F11), CpyDplctInd (F12)
+
+    def period_fetch(self, configuration, bank, day):
+        "Dialog Fetch Statements for Period Again for one day"
+        pool = Pool()
+        Configuration = pool.get('account.ebics.configuration')
+        FetchPeriod = pool.get('account.ebics.fetch_period', type='wizard')
+        ModelData = pool.get('ir.model.data')
+        with Transaction().set_context(
+                active_model='account.ebics.configuration',
+                active_id=configuration.id,
+                active_ids=[configuration.id]):
+            session_id, _, _ = FetchPeriod.create()
+            wizard = FetchPeriod(session_id)
+            wizard.start.configuration = Configuration(configuration.id)
+            wizard.start.format = pool.get('account.ebics.format')(
+                ModelData.get_id('account_ebics', 'format_camt053_de'))
+            wizard.start.date_from = day
+            wizard.start.date_to = day
+            with self.bank_connection(OrderTransport(bank)):
+                self.assertEqual(wizard.transition_fetch(), 'result')
+            commit()
+            return wizard.default_result(None)
+
+    @with_transaction()
+    def test_repeated_file(self):
+        "Fetched again for a period: the new file refers to the first one"
+        pool = Pool()
+        LogFile = pool.get('account.ebics.log.file')
+        Run = pool.get('account.ebics.run')
+        Date = pool.get('ir.date')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        name, data = self.provide(bank, copy_duplicate='DUPL')
+        self.download(configuration, bank)
+        first, = self.btd_logs(configuration)[0].files
+        self.assertIsNone(first.first_file)
+        self.assertFalse(first.repeated)
+        self.assertEqual(first.copy_duplicate, 'DUPL')
+
+        result = self.period_fetch(configuration, bank, Date.today())
+        log = self.btd_logs(configuration)[-1]
+        again, = log.files
+        self.assertEqual(again.first_file, first)
+        self.assertTrue(again.repeated)
+        self.assertEqual(again.first_received, first.timestamp)
+        self.assertEqual(again.first_log, first.ebics_log)
+        self.assertEqual(again.sha256, first.sha256)
+        # E09 sets duplicate; E08 keeps pending
+        self.assertEqual(again.state, 'pending')
+        # result page and run
+        line, = result['lines']
+        self.assertEqual((line['files'], line['repeated']), (1, 1))
+        self.assertIn('1 file(s) received, of them 1 repeated',
+            line['message'])
+        self.assertIn('of them 1 repeated', result['summary'])
+        run = Run.search([], order=[('id', 'DESC')], limit=1)[0]
+        self.assertSteps(run,
+            '1 file(s) received, of them 1 repeated',
+            'Run finished: 1 file(s) received, of them 1 repeated')
+        # filter "only repeated"
+        files = LogFile.search([
+                ('ebics_log.configuration', '=', configuration.id)])
+        self.assertEqual(LogFile.search([
+                    ('id', 'in', [f.id for f in files]),
+                    ('repeated', '=', True)]), [again])
+        self.assertEqual(LogFile.search([
+                    ('id', 'in', [f.id for f in files]),
+                    ('repeated', '=', False)]), [first])
+
+    @with_transaction()
+    def test_repeated_file_container_and_company(self):
+        """Two equal files in one container: the second refers to the
+        first; the same file in another company: no reference"""
+        Date = Pool().get('ir.date')
+        bank = fake_bank.FakeBank(keyring=cached_bank_keyring())
+        configuration = self.active(bank)
+        name, data = camt_generator.make_camt053(TEST_IBAN, entries=2)
+        bank.add_download(CAMT053_BTF, 'a-' + name, data)
+        bank.add_download(CAMT053_BTF, 'b-' + name, data)
+        self.download(configuration, bank)
+        log, = self.btd_logs(configuration)
+        first, second = sorted(log.files, key=lambda f: f.id)
+        self.assertIsNone(first.first_file)
+        self.assertEqual(second.first_file, first)
+
+        # another company fetches the same files again (period)
+        other = self.active(bank, user_id='OTHERUSER')
+        self.assertNotEqual(other.company, configuration.company)
+        self.period_fetch(other, bank, Date.today())
+        other_log, = self.btd_logs(other)
+        a, b = sorted(other_log.files, key=lambda f: f.id)
+        self.assertIsNone(a.first_file)
+        self.assertEqual(b.first_file, a)
+
+    @with_transaction()
+    def test_copy_duplicate(self):
+        "CpyDplctInd of camt.053 and camt.052 (first block), else empty"
+        info = configuration_module.statement_info
+        for value in ['COPY', 'DUPL', 'CODU']:
+            with self.subTest(value=value):
+                data = camt_generator.make_camt053(
+                    TEST_IBAN, entries=1, copy_duplicate=value)[1]
+                self.assertEqual(info(data)[2], value)
+        data = camt_generator.make_camt053(TEST_IBAN, entries=1)[1]
+        self.assertIsNone(info(data)[2])
+        self.assertEqual(info(
+                b'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:'
+                b'camt.052.001.08"><BkToCstmrAcctRpt><Rpt><Id>R1</Id>'
+                b'<CpyDplctInd>DUPL</CpyDplctInd><Acct><Id><IBAN>'
+                + TEST_IBAN_2.encode() + b'</IBAN></Id></Acct></Rpt>'
+                b'</BkToCstmrAcctRpt></Document>'),
+            ('camt.052.001.08', TEST_IBAN_2, 'DUPL'))
+        # an older namespace version is read as well
+        self.assertEqual(info(
+                b'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:'
+                b'camt.054.001.02"><BkToCstmrDbtCdtNtfctn><Ntfctn>'
+                b'<CpyDplctInd>COPY</CpyDplctInd></Ntfctn>'
+                b'</BkToCstmrDbtCdtNtfctn></Document>')[2], 'COPY')
+        # unknown values are not stored
+        self.assertIsNone(info(
+                b'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:'
+                b'camt.053.001.08"><BkToCstmrStmt><Stmt>'
+                b'<CpyDplctInd>XXXX</CpyDplctInd></Stmt>'
+                b'</BkToCstmrStmt></Document>')[2])
+        with self.assertRaises(ValueError):
+            camt_generator.make_camt053(TEST_IBAN, copy_duplicate='OTHER')
+
+    @with_transaction()
+    def test_repeated_fields_locked(self):
+        "first_file and copy_duplicate cannot be changed (PR03)"
+        pool = Pool()
+        LogFile = pool.get('account.ebics.log.file')
+        company = create_company()
+        with set_company(company):
+            log = create_log(company)
+        file_ = log.files[0]
+        for name, value in [('first_file', log.files[1].id),
+                ('copy_duplicate', 'DUPL')]:
+            with self.subTest(field=name):
+                with self.assertRaises(AccessError):
+                    LogFile.write_internal([file_], {name: value})
+                with self.assertRaises(AccessError):
+                    LogFile.write([file_], {name: value})
+        self.assertIn('first_file', LogFile._fields)
+        self.assertTrue(any(
+                'sha256' in str(index.expressions[0][0])
+                for index in LogFile._sql_indexes))
+
+    @with_transaction()
+    def test_fill_first_file(self):
+        "Migration: earlier files get first_file once, idempotent"
+        pool = Pool()
+        LogFile = pool.get('account.ebics.log.file')
+        company = create_company()
+        with set_company(company):
+            first_log = create_log(company)
+            second_log = create_log(company, first_log.configuration)
+        ids = [f.id for f in first_log.files + second_log.files]
+        expected = {f.id: f.first_file.id if f.first_file else None
+            for f in LogFile.browse(ids)}
+        self.assertEqual(sorted(v for v in expected.values() if v),
+            sorted(f.id for f in first_log.files))
+        table = LogFile.__table__()
+        cursor = Transaction().connection.cursor()
+        cursor.execute(*table.update(
+                [table.first_file], [None], where=table.id.in_(ids)))
+        LogFile._fill_first_file()
+        LogFile._fill_first_file()
+        cursor.execute(*table.select(
+                table.id, table.first_file, where=table.id.in_(ids)))
+        self.assertEqual(dict(cursor), expected)
 
 
 del ModuleTestCase

@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form col="4">
+    <image name="tryton-info" xexpand="0" xfill="0"/>
+    <group col="1" colspan="3" id="explanation" xexpand="1">
+        <label string="The bank delivers the statements of the period again, also those already fetched. Duplicates are detected by the import." id="explanation_again" xalign="0.0"/>
+        <label string="How far back the bank delivers depends on the bank." id="explanation_bank" xalign="0.0"/>
+    </group>
+    <label name="configuration"/>
+    <field name="configuration" colspan="3"/>
+    <label name="format"/>
+    <field name="format" colspan="3"/>
+    <label name="date_from"/>
+    <field name="date_from"/>
+    <label name="date_to"/>
+    <field name="date_to"/>
+    <field name="formats" invisible="1" colspan="4"/>
+    <field name="today" invisible="1"/>
+</form>

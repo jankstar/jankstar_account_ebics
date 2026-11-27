@@ -4,8 +4,9 @@
 import datetime
 import hashlib
 
+from trytond import backend
 from trytond.i18n import gettext
-from trytond.model import ModelSQL, ModelView, fields
+from trytond.model import Index, ModelSQL, ModelView, fields
 from trytond.model.exceptions import AccessError
 from trytond.pool import Pool
 from trytond.pyson import Eval, If
@@ -103,6 +104,26 @@ class Log(LockedMixin, ModelSQL, ModelView):
     technical_return_code = fields.Char("Technical Return Code")
     business_return_code = fields.Char("Business Return Code")
     return_message = fields.Char("Return Message")
+    # set at the creation, not changeable afterwards (PR03; F4, F7 of E08)
+    warnings = fields.Text(
+        "Warnings", readonly=True,
+        help="Schema warnings (xsd_mode warn) and other notes of the "
+        "order.")
+    num_segments = fields.Integer(
+        "Segments", readonly=True,
+        help="Number of segments announced by the bank (BTD).")
+    # who or what started the order (request of the user, 27.11.2026); the
+    # user is create_uid
+    trigger = fields.Selection([
+            ('button', "Button"),
+            ('menu', "Menu"),
+            ('period', "Period Dialog"),
+            ('cron', "Cron, started automatically"),
+            ('cron_manual', "Cron, started manually"),
+            ], "Trigger", readonly=True, sort=False)
+    run = fields.Many2One(
+        'account.ebics.run', "Run", readonly=True, ondelete='RESTRICT',
+        help="The run of the download that created this log.")
     receipt = fields.Selection([
             ('none', "None"),
             ('positive', "Positive"),
@@ -135,6 +156,11 @@ class Log(LockedMixin, ModelSQL, ModelView):
     @classmethod
     def default_receipt(cls):
         return 'none'
+
+    @classmethod
+    def default_trigger(cls):
+        # INI, HIA, HPB come from the buttons of the connection
+        return Transaction().context.get('ebics_trigger', 'button')
 
     def get_rec_name(self, name):
         timestamp = self.timestamp.replace(microsecond=0)
@@ -175,6 +201,7 @@ class Log(LockedMixin, ModelSQL, ModelView):
         Never pass private keys or the passphrase (ch. 8.1)."""
         pool = Pool()
         Format = pool.get('account.ebics.format')
+        LogFile = pool.get('account.ebics.log.file')
         values = dict(values)
         values['configuration'] = configuration.id
         values['company'] = configuration.company.id
@@ -185,10 +212,12 @@ class Log(LockedMixin, ModelSQL, ModelView):
                 format_ = Format(format_)
             values['format'] = format_.id
             values.setdefault('btf_params', format_.btf_text)
-        if files:
-            values['files'] = [('create', [dict(f) for f in files])]
         with without_check_access():
             log, = cls.create([values])
+            # one file after the other, so that a repeated file finds also
+            # an earlier equal file of the same container (F11 of E08)
+            for file_values in files or []:
+                LogFile.create([dict(file_values, ebics_log=log.id)])
         return log
 
 
@@ -222,6 +251,25 @@ class LogFile(LockedMixin, HistoryMixin, ModelSQL, ModelView):
         'account.ebics.log.file-account.statement', 'file', 'statement',
         "Statements")
     error_message = fields.Text("Error Message")
+    # F11 of E08: set only when the file is created (not in PR03)
+    first_file = fields.Many2One(
+        'account.ebics.log.file', "Already Received", readonly=True,
+        ondelete='RESTRICT',
+        help="The first file of the company with the same content (SHA-256); "
+        "empty for the first one.")
+    repeated = fields.Function(
+        fields.Boolean("Repeated",
+            help="The same file was received before."),
+        'get_repeated', searcher='search_repeated')
+    first_received = fields.Function(
+        fields.DateTime("First Received"), 'get_first')
+    first_log = fields.Function(
+        fields.Many2One('account.ebics.log', "First Log"), 'get_first')
+    # F12 of E08: CpyDplctInd of the bank, set only when created
+    copy_duplicate = fields.Char(
+        "Copy/Duplicate", readonly=True,
+        help="Indicator of the bank in the statement (CpyDplctInd): COPY, "
+        "DUPL or CODU; empty if the bank sent none.")
 
     @classmethod
     def __setup__(cls):
@@ -230,6 +278,70 @@ class LogFile(LockedMixin, HistoryMixin, ModelSQL, ModelView):
             ('timestamp', 'DESC'),
             ('id', 'DESC'),
             ]
+        table = cls.__table__()
+        # duplicates are searched by the hash value (F11)
+        cls._sql_indexes.add(
+            Index(table, (table.sha256, Index.Equality())))
+
+    @classmethod
+    def __register__(cls, module_name):
+        table_h = cls.__table_handler__(module_name)
+        new_column = not table_h.column_exist('first_file')
+        super().__register__(module_name)
+        if new_column:
+            cls._fill_first_file()
+
+    @classmethod
+    def _fill_first_file(cls):
+        """Migration (E08.1): files received before get first_file once,
+        the earliest file (id) of the company with the same hash value;
+        idempotent (only empty values, the first file stays empty)"""
+        pool = Pool()
+        Log = pool.get('account.ebics.log')
+        cursor = Transaction().connection.cursor()
+        table = cls.__table__()
+        log = Log.__table__()
+        cursor.execute(*table.join(
+                log, condition=table.ebics_log == log.id).select(
+                table.id, table.sha256, log.company, table.first_file,
+                where=table.sha256 != None,  # noqa: E711
+                order_by=table.id.asc))
+        first = {}
+        updates = {}
+        for id_, sha256, company, first_file in cursor:
+            key = (company, sha256)
+            if key not in first:
+                first[key] = id_
+            elif first_file is None:
+                updates.setdefault(first[key], []).append(id_)
+        for first_id, ids in updates.items():
+            for start in range(0, len(ids), backend.MAX_QUERY_PARAMS):
+                cursor.execute(*table.update(
+                        [table.first_file], [first_id],
+                        where=table.id.in_(
+                            ids[start:start + backend.MAX_QUERY_PARAMS])))
+
+    def get_repeated(self, name):
+        return bool(self.first_file)
+
+    @classmethod
+    def search_repeated(cls, name, clause):
+        _, operator, value = clause[:3]
+        repeated = bool(value) if operator == '=' else not bool(value)
+        return [('first_file', '!=' if repeated else '=', None)]
+
+    @classmethod
+    def get_first(cls, files, names):
+        result = {n: {f.id: None for f in files} for n in names}
+        for file_ in files:
+            if file_.first_file:
+                if 'first_received' in names:
+                    result['first_received'][file_.id] = (
+                        file_.first_file.timestamp)
+                if 'first_log' in names:
+                    result['first_log'][file_.id] = (
+                        file_.first_file.ebics_log.id)
+        return result
 
     @classmethod
     def default_state(cls):
@@ -267,7 +379,25 @@ class LogFile(LockedMixin, HistoryMixin, ModelSQL, ModelView):
             values['sha256'] = (
                 hashlib.sha256(bytes(data)).hexdigest()
                 if data is not None else None)
+            values['first_file'] = cls._find_first_file(
+                values['sha256'], values.get('ebics_log'))
         return values
+
+    @classmethod
+    def _find_first_file(cls, sha256, log_id):
+        """The earliest file of the same company with the same hash value
+        (F11 of E08), None for a new content"""
+        pool = Pool()
+        Log = pool.get('account.ebics.log')
+        if not sha256 or not log_id:
+            return None
+        with without_check_access():
+            company = Log(log_id).company
+            files = cls.search([
+                    ('sha256', '=', sha256),
+                    ('ebics_log.company', '=', company.id),
+                    ], order=[('id', 'ASC')], limit=1)
+        return files[0].id if files else None
 
     @classmethod
     def view_attributes(cls):

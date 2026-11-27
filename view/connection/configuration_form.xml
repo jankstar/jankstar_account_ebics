@@ -83,5 +83,6 @@ copyright notices and license terms. -->
         <button name="reactivate" icon="tryton-refresh"/>
         <button name="fetch_bank_keys" icon="tryton-download"/>
         <button name="confirm_bank_keys" icon="tryton-ok"/>
+        <button name="download_statements" icon="tryton-download"/>
     </group>
 </form>

@@ -266,6 +266,74 @@ msgctxt "field:account.ebics.configuration.reset_draft.start,user_id:"
 msgid "User ID"
 msgstr "Teilnehmer-ID"
 
+msgctxt "field:account.ebics.fetch.result,lines:"
+msgid "Results"
+msgstr "Ergebnisse"
+
+msgctxt "field:account.ebics.fetch.result,logs:"
+msgid "Logs"
+msgstr "Protokolle"
+
+msgctxt "field:account.ebics.fetch.result,outcomes:"
+msgid "Outcomes"
+msgstr "Ergebnisdaten"
+
+msgctxt "field:account.ebics.fetch.result,summary:"
+msgid "Summary"
+msgstr "Zusammenfassung"
+
+msgctxt "field:account.ebics.fetch.result.line,configuration:"
+msgid "Connection"
+msgstr "Zugang"
+
+msgctxt "field:account.ebics.fetch.result.line,files:"
+msgid "Files"
+msgstr "Dateien"
+
+msgctxt "field:account.ebics.fetch.result.line,format:"
+msgid "Format"
+msgstr "Format"
+
+msgctxt "field:account.ebics.fetch.result.line,message:"
+msgid "Message"
+msgstr "Meldung"
+
+msgctxt "field:account.ebics.fetch.result.line,repeated:"
+msgid "Repeated"
+msgstr "Wiederholung"
+
+msgctxt "field:account.ebics.fetch.result.line,state:"
+msgid "State"
+msgstr "Status"
+
+msgctxt "field:account.ebics.fetch_period.start,configuration:"
+msgid "Connection"
+msgstr "Zugang"
+
+msgctxt "field:account.ebics.fetch_period.start,date_from:"
+msgid "From"
+msgstr "Von"
+
+msgctxt "field:account.ebics.fetch_period.start,date_to:"
+msgid "To"
+msgstr "Bis"
+
+msgctxt "field:account.ebics.fetch_period.start,format:"
+msgid "Format"
+msgstr "Format"
+
+msgctxt "field:account.ebics.fetch_period.start,formats:"
+msgid "Formats"
+msgstr "Formate"
+
+msgctxt "field:account.ebics.fetch_period.start,today:"
+msgid "Today"
+msgstr "Heute"
+
+msgctxt "field:account.ebics.fetch_statements.start,configurations:"
+msgid "Connections"
+msgstr "Zugänge"
+
 msgctxt "field:account.ebics.format,btf_params:"
 msgid "BTF Parameters"
 msgstr "BTF-Angabe"
@@ -342,6 +410,10 @@ msgctxt "field:account.ebics.log,format:"
 msgid "Format"
 msgstr "Format"
 
+msgctxt "field:account.ebics.log,num_segments:"
+msgid "Segments"
+msgstr "Segmente"
+
 msgctxt "field:account.ebics.log,order_type:"
 msgid "Order Type"
 msgstr "Auftragsart"
@@ -366,6 +438,10 @@ msgctxt "field:account.ebics.log,return_message:"
 msgid "Return Message"
 msgstr "Rückmeldung"
 
+msgctxt "field:account.ebics.log,run:"
+msgid "Run"
+msgstr "Lauf"
+
 msgctxt "field:account.ebics.log,state:"
 msgid "State"
 msgstr "Status"
@@ -382,6 +458,14 @@ msgctxt "field:account.ebics.log,transaction_id:"
 msgid "Transaction ID"
 msgstr "Transaktions-ID"
 
+msgctxt "field:account.ebics.log,trigger:"
+msgid "Trigger"
+msgstr "Auslöser"
+
+msgctxt "field:account.ebics.log,warnings:"
+msgid "Warnings"
+msgstr "Warnungen"
+
 msgctxt "field:account.ebics.log.file,account:"
 msgid "Account"
 msgstr "Konto"
@@ -389,6 +473,10 @@ msgstr "Konto"
 msgctxt "field:account.ebics.log.file,company:"
 msgid "Company"
 msgstr "Unternehmen"
+
+msgctxt "field:account.ebics.log.file,copy_duplicate:"
+msgid "Copy/Duplicate"
+msgstr "Kopie/Duplikat"
 
 msgctxt "field:account.ebics.log.file,data:"
 msgid "Data"
@@ -406,6 +494,18 @@ msgctxt "field:account.ebics.log.file,error_message:"
 msgid "Error Message"
 msgstr "Fehlermeldung"
 
+msgctxt "field:account.ebics.log.file,first_file:"
+msgid "Already Received"
+msgstr "Bereits empfangen"
+
+msgctxt "field:account.ebics.log.file,first_log:"
+msgid "First Log"
+msgstr "Erstes Protokoll"
+
+msgctxt "field:account.ebics.log.file,first_received:"
+msgid "First Received"
+msgstr "Erstmals empfangen"
+
 msgctxt "field:account.ebics.log.file,iban:"
 msgid "IBAN"
 msgstr "IBAN"
@@ -417,6 +517,10 @@ msgstr "Nachrichtentyp"
 msgctxt "field:account.ebics.log.file,name:"
 msgid "Name"
 msgstr "Name"
+
+msgctxt "field:account.ebics.log.file,repeated:"
+msgid "Repeated"
+msgstr "Wiederholung"
 
 msgctxt "field:account.ebics.log.file,sha256:"
 msgid "SHA-256"
@@ -441,6 +545,50 @@ msgstr "Datei"
 msgctxt "field:account.ebics.log.file-account.statement,statement:"
 msgid "Statement"
 msgstr "Auszug"
+
+msgctxt "field:account.ebics.run,company:"
+msgid "Company"
+msgstr "Unternehmen"
+
+msgctxt "field:account.ebics.run,cron:"
+msgid "Cron"
+msgstr "Cron"
+
+msgctxt "field:account.ebics.run,end:"
+msgid "End"
+msgstr "Ende"
+
+msgctxt "field:account.ebics.run,history:"
+msgid "Steps"
+msgstr "Verlauf"
+
+msgctxt "field:account.ebics.run,logs:"
+msgid "EBICS Logs"
+msgstr "EBICS-Protokolle"
+
+msgctxt "field:account.ebics.run,start:"
+msgid "Start"
+msgstr "Beginn"
+
+msgctxt "field:account.ebics.run,state:"
+msgid "State"
+msgstr "Status"
+
+msgctxt "field:account.ebics.run,summary:"
+msgid "Summary"
+msgstr "Zusammenfassung"
+
+msgctxt "field:account.ebics.run,trigger:"
+msgid "Trigger"
+msgstr "Auslöser"
+
+msgctxt "field:account.ebics.run,trigger_text:"
+msgid "Started"
+msgstr "Gestartet"
+
+msgctxt "field:account.ebics.run,user:"
+msgid "User"
+msgstr "Benutzer"
 
 msgctxt "help:account.ebics.account,bank_account:"
 msgid "Active bank account of the company with an IBAN."
@@ -531,6 +679,18 @@ msgctxt "help:account.ebics.configuration.reset_draft.start,confirm:"
 msgid "The private keys of this connection are deleted for good."
 msgstr "Die privaten Schlüssel dieses Zugangs werden endgültig gelöscht."
 
+msgctxt "help:account.ebics.fetch.result.line,repeated:"
+msgid "Files received before (same content)."
+msgstr "Bereits früher empfangene Dateien (gleicher Inhalt)."
+
+msgctxt "help:account.ebics.fetch_period.start,date_to:"
+msgid ""
+"The bank delivers the statements of the period again, also those already "
+"fetched; how far back depends on the bank."
+msgstr ""
+"Die Bank liefert die Auszüge des Zeitraums erneut, auch bereits abgeholte; "
+"wie weit zurück, ist bankabhängig."
+
 msgctxt "help:account.ebics.format,active:"
 msgid "Deactivate standard formats instead of deleting them."
 msgstr "Standardformate deaktivieren statt löschen."
@@ -563,6 +723,10 @@ msgctxt "help:account.ebics.log,btf_params:"
 msgid "The BTF parameters actually sent to the bank."
 msgstr "Die tatsächlich an die Bank gesendete BTF-Angabe."
 
+msgctxt "help:account.ebics.log,num_segments:"
+msgid "Number of segments announced by the bank (BTD)."
+msgstr "Von der Bank angekündigte Anzahl der Segmente (BTD)."
+
 msgctxt "help:account.ebics.log,order_type:"
 msgid "E.g. INI, HIA, HPB, BTD."
 msgstr "Z. B. INI, HIA, HPB, BTD."
@@ -575,13 +739,49 @@ msgctxt "help:account.ebics.log,receipt:"
 msgid "Receipt of the download sent to the bank."
 msgstr "An die Bank gesendete Quittung des Downloads."
 
+msgctxt "help:account.ebics.log,run:"
+msgid "The run of the download that created this log."
+msgstr "Der Lauf des Abrufs, der dieses Protokoll angelegt hat."
+
+msgctxt "help:account.ebics.log,warnings:"
+msgid "Schema warnings (xsd_mode warn) and other notes of the order."
+msgstr "Schemawarnungen (xsd_mode warn) und weitere Hinweise zum Auftrag."
+
+msgctxt "help:account.ebics.log.file,copy_duplicate:"
+msgid ""
+"Indicator of the bank in the statement (CpyDplctInd): COPY, DUPL or CODU; "
+"empty if the bank sent none."
+msgstr ""
+"Kennzeichen der Bank im Auszug (CpyDplctInd): COPY, DUPL oder CODU; leer, "
+"wenn die Bank keines sendet."
+
+msgctxt "help:account.ebics.log.file,first_file:"
+msgid ""
+"The first file of the company with the same content (SHA-256); empty for the"
+" first one."
+msgstr ""
+"Die erste Datei des Unternehmens mit gleichem Inhalt (SHA-256); leer bei der"
+" ersten."
+
 msgctxt "help:account.ebics.log.file,message_type:"
 msgid "E.g. camt.053.001.08."
 msgstr "Z. B. camt.053.001.08."
 
+msgctxt "help:account.ebics.log.file,repeated:"
+msgid "The same file was received before."
+msgstr "Dieselbe Datei wurde schon früher empfangen."
+
 msgctxt "help:account.ebics.log.file,sha256:"
 msgid "Hash value of the data to detect duplicates."
 msgstr "Hashwert der Daten zur Erkennung von Dubletten."
+
+msgctxt "help:account.ebics.run,trigger_text:"
+msgid "How the run was started, with cron and user."
+msgstr "Wie der Lauf gestartet wurde, mit Cron und Benutzer."
+
+msgctxt "help:account.ebics.run,user:"
+msgid "The user who started the run (root for the scheduler)."
+msgstr "Der Benutzer, der den Lauf gestartet hat (root beim Zeitplaner)."
 
 msgctxt "model:account.ebics.account,string:"
 msgid "EBICS Account"
@@ -602,6 +802,22 @@ msgstr "Bankschlüssel bestätigen"
 msgctxt "model:account.ebics.configuration.reset_draft.start,string:"
 msgid "Reset EBICS Connection to Draft"
 msgstr "EBICS-Zugang auf Entwurf zurücksetzen"
+
+msgctxt "model:account.ebics.fetch.result,string:"
+msgid "Result of the Download"
+msgstr "Ergebnis des Abrufs"
+
+msgctxt "model:account.ebics.fetch.result.line,string:"
+msgid "Result of the Download per Format"
+msgstr "Ergebnis des Abrufs je Format"
+
+msgctxt "model:account.ebics.fetch_period.start,string:"
+msgid "Fetch Statements for Period Again"
+msgstr "Auszüge für Zeitraum erneut abrufen"
+
+msgctxt "model:account.ebics.fetch_statements.start,string:"
+msgid "Fetch Statements"
+msgstr "Auszüge abrufen"
 
 msgctxt "model:account.ebics.format,name:format_camt052_de"
 msgid "Intraday Transactions (camt.052)"
@@ -631,6 +847,10 @@ msgctxt "model:account.ebics.log.file-account.statement,string:"
 msgid "EBICS Received File - Statement"
 msgstr "EBICS empfangene Datei - Auszug"
 
+msgctxt "model:account.ebics.run,string:"
+msgid "EBICS Run"
+msgstr "EBICS-Lauf"
+
 msgctxt "model:ir.action,name:act_account_form"
 msgid "Released Accounts"
 msgstr "Freigegebene Konten"
@@ -651,6 +871,10 @@ msgctxt "model:ir.action,name:act_log_form"
 msgid "Logs"
 msgstr "Protokoll"
 
+msgctxt "model:ir.action,name:act_run_form"
+msgid "Runs"
+msgstr "Läufe"
+
 msgctxt "model:ir.action,name:report_ini_letter_hia"
 msgid "HIA Letter"
 msgstr "HIA-Brief"
@@ -666,6 +890,23 @@ msgstr "Bankschlüssel bestätigen"
 msgctxt "model:ir.action,name:wizard_configuration_reset_draft"
 msgid "Reset to Draft"
 msgstr "Auf Entwurf zurücksetzen"
+
+msgctxt "model:ir.action,name:wizard_fetch_period"
+msgid "Fetch Statements for Period Again"
+msgstr "Auszüge für Zeitraum erneut abrufen"
+
+msgctxt "model:ir.action,name:wizard_fetch_statements"
+msgid "Fetch Statements"
+msgstr "Auszüge abrufen"
+
+msgctxt "model:ir.action.act_window.domain,name:act_log_file_form_domain_all"
+msgid "All"
+msgstr "Alle"
+
+msgctxt ""
+"model:ir.action.act_window.domain,name:act_log_file_form_domain_repeated"
+msgid "Repeated"
+msgstr "Wiederholung"
 
 msgctxt "model:ir.message,text:msg_account_bank_account_unique"
 msgid "A bank account can be released only once per EBICS connection."
@@ -820,6 +1061,79 @@ msgid ""
 "\"https://\"."
 msgstr ""
 "Die URL des EBICS-Zugangs „%(configuration)s“ muss mit „https://“ beginnen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_error"
+msgid "%(configuration)s, %(format)s: %(error)s"
+msgstr "%(configuration)s, %(format)s: %(error)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_files"
+msgid ""
+"%(configuration)s, %(format)s: %(count)s file(s) received, of them "
+"%(repeated)s repeated."
+msgstr ""
+"%(configuration)s, %(format)s: %(count)s Datei(en) empfangen, davon "
+"%(repeated)s Wiederholung(en)."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_no_data"
+msgid "%(configuration)s, %(format)s: no new data."
+msgstr "%(configuration)s, %(format)s: keine neuen Daten."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_no_formats"
+msgid "EBICS connection \"%(configuration)s\" has no formats to fetch."
+msgstr "Der EBICS-Zugang „%(configuration)s“ hat keine abzurufenden Formate."
+
+msgctxt "model:ir.message,text:msg_fetch_none"
+msgid "There is no active EBICS connection for the current companies."
+msgstr "Für die aktuellen Unternehmen gibt es keinen aktiven EBICS-Zugang."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_not_active"
+msgid ""
+"EBICS connection \"%(configuration)s\" is not active; no statements are "
+"fetched."
+msgstr ""
+"Der EBICS-Zugang „%(configuration)s“ ist nicht aktiv; es werden keine "
+"Auszüge abgerufen."
+
+msgctxt "model:ir.message,text:msg_fetch_period_dates"
+msgid ""
+"The start date must not be after the end date and the end date not after "
+"today."
+msgstr ""
+"Das Von-Datum darf nicht nach dem Bis-Datum und das Bis-Datum nicht nach "
+"heute liegen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_period_format"
+msgid ""
+"Format \"%(format)s\" is not a format of EBICS connection "
+"\"%(configuration)s\"."
+msgstr ""
+"Das Format „%(format)s“ gehört nicht zum EBICS-Zugang „%(configuration)s“."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_receipt_failed"
+msgid ""
+"%(configuration)s, %(format)s: %(count)s file(s) received (of them "
+"%(repeated)s repeated) and stored, but the receipt failed (%(error)s). The "
+"bank will deliver the data again."
+msgstr ""
+"%(configuration)s, %(format)s: %(count)s Datei(en) empfangen (davon "
+"%(repeated)s Wiederholung(en)) und gespeichert, aber die Quittung ist "
+"fehlgeschlagen (%(error)s). Die Bank liefert die Daten erneut."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_fetch_summary"
+msgid ""
+"%(files)s file(s) received, of them %(repeated)s repeated, %(no_data)s "
+"format(s) without new data, %(errors)s error(s)."
+msgstr ""
+"%(files)s Datei(en) empfangen, davon %(repeated)s Wiederholung(en), "
+"%(no_data)s Format(e) ohne neue Daten, %(errors)s Fehler."
 
 #, python-format
 msgctxt "model:ir.message,text:msg_format_import_camt053"
@@ -991,6 +1305,96 @@ msgstr ""
 "bestätigen."
 
 #, python-format
+msgctxt "model:ir.message,text:msg_run_aborted"
+msgid "Run aborted by an unexpected error: %(error)s"
+msgstr "Lauf durch einen unerwarteten Fehler abgebrochen: %(error)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_company"
+msgid "Company %(company)s: %(count)s active EBICS connection(s)"
+msgstr "Unternehmen %(company)s: %(count)s aktive(r) EBICS-Zugang/-Zugänge"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_connection"
+msgid "EBICS connection \"%(configuration)s\": formats %(formats)s"
+msgstr "EBICS-Zugang „%(configuration)s“: Formate %(formats)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_connections"
+msgid "%(count)s EBICS connection(s) to fetch: %(configurations)s"
+msgstr "%(count)s EBICS-Zugang/-Zugänge abzurufen: %(configurations)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_cron"
+msgid "cron %(cron)s"
+msgstr "Cron %(cron)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_finished"
+msgid "Run finished: %(summary)s"
+msgstr "Lauf beendet: %(summary)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_formats_skipped"
+msgid "%(configuration)s: remaining formats skipped: %(formats)s"
+msgstr "%(configuration)s: übrige Formate übersprungen: %(formats)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_last_fetch"
+msgid "%(configuration)s: last fetch set"
+msgstr "%(configuration)s: letzter Abruf gesetzt"
+
+msgctxt "model:ir.message,text:msg_run_no_company"
+msgid "No company in the context of the cron: add the companies in the cron."
+msgstr ""
+"Kein Unternehmen im Kontext des Crons: die Unternehmen im Cron-Eintrag "
+"eintragen."
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_receipt"
+msgid ""
+"%(configuration)s, %(format)s: positive receipt sent, answer of the bank "
+"%(code)s"
+msgstr ""
+"%(configuration)s, %(format)s: positive Quittung gesendet, Antwort der Bank "
+"%(code)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_request"
+msgid "%(configuration)s, %(format)s: BTD request %(btf)s%(period)s sent"
+msgstr "%(configuration)s, %(format)s: BTD-Anfrage %(btf)s%(period)s gesendet"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_skipped"
+msgid "EBICS connection \"%(configuration)s\" skipped: state %(state)s"
+msgstr "EBICS-Zugang „%(configuration)s“ übersprungen: Status %(state)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_started"
+msgid "Run started: %(trigger)s"
+msgstr "Lauf gestartet: %(trigger)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_stored"
+msgid ""
+"%(configuration)s, %(format)s: %(count)s file(s) received, of them "
+"%(repeated)s repeated (%(segments)s segment(s)), stored in EBICS log %(log)s"
+msgstr ""
+"%(configuration)s, %(format)s: %(count)s Datei(en) empfangen, davon "
+"%(repeated)s Wiederholung(en) (%(segments)s Segment(e)), gespeichert im "
+"EBICS-Protokoll %(log)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_user"
+msgid "user %(user)s"
+msgstr "Benutzer %(user)s"
+
+#, python-format
+msgctxt "model:ir.message,text:msg_run_with_log"
+msgid "%(text)s (EBICS log %(log)s)"
+msgstr "%(text)s (EBICS-Protokoll %(log)s)"
+
+#, python-format
 msgctxt "model:ir.message,text:msg_transport_error"
 msgid ""
 "The connection to the bank failed for EBICS connection "
@@ -1002,6 +1406,11 @@ msgstr ""
 msgctxt "model:ir.model.button,string:configuration_confirm_bank_keys_button"
 msgid "Confirm Bank Keys"
 msgstr "Bankschlüssel bestätigen"
+
+msgctxt ""
+"model:ir.model.button,string:configuration_download_statements_button"
+msgid "Fetch Statements"
+msgstr "Auszüge abrufen"
 
 msgctxt "model:ir.model.button,string:configuration_fetch_bank_keys_button"
 msgid "Fetch Bank Keys"
@@ -1055,6 +1464,10 @@ msgctxt "model:ir.rule.group,name:rule_group_log_file_companies"
 msgid "User in companies"
 msgstr "Benutzer in Unternehmen"
 
+msgctxt "model:ir.rule.group,name:rule_group_run_companies"
+msgid "User in companies"
+msgstr "Benutzer in Unternehmen"
+
 msgctxt "model:ir.ui.menu,name:menu_account_form"
 msgid "Released Accounts"
 msgstr "Freigegebene Konten"
@@ -1064,12 +1477,20 @@ msgid "EBICS Connections"
 msgstr "EBICS-Zugänge"
 
 msgctxt "model:ir.ui.menu,name:menu_ebics"
-msgid "EBICS"
-msgstr "EBICS"
+msgid "Electronic Banking (EBICS)"
+msgstr "Electronic Banking (EBICS)"
 
 msgctxt "model:ir.ui.menu,name:menu_ebics_configuration"
-msgid "EBICS"
-msgstr "EBICS"
+msgid "Electronic Banking (EBICS)"
+msgstr "Electronic Banking (EBICS)"
+
+msgctxt "model:ir.ui.menu,name:menu_fetch_period"
+msgid "Fetch Statements for Period Again"
+msgstr "Auszüge für Zeitraum erneut abrufen"
+
+msgctxt "model:ir.ui.menu,name:menu_fetch_statements"
+msgid "Fetch Statements"
+msgstr "Auszüge abrufen"
 
 msgctxt "model:ir.ui.menu,name:menu_format_form"
 msgid "Formats"
@@ -1082,6 +1503,10 @@ msgstr "Empfangene Dateien"
 msgctxt "model:ir.ui.menu,name:menu_log_form"
 msgid "Logs"
 msgstr "Protokoll"
+
+msgctxt "model:ir.ui.menu,name:menu_run_form"
+msgid "Runs"
+msgstr "Läufe"
 
 msgctxt "model:res.group,name:group_ebics"
 msgid "EBICS"
@@ -1109,7 +1534,7 @@ msgstr "Zertifikat (PEM)"
 
 msgctxt "report:account.ebics.ini_letter_hia:"
 msgid "Company"
-msgstr "Firma"
+msgstr "Unternehmen"
 
 msgctxt "report:account.ebics.ini_letter_hia:"
 msgid "Date"
@@ -1196,7 +1621,7 @@ msgstr "Zertifikat (PEM)"
 
 msgctxt "report:account.ebics.ini_letter_ini:"
 msgid "Company"
-msgstr "Firma"
+msgstr "Unternehmen"
 
 msgctxt "report:account.ebics.ini_letter_ini:"
 msgid "Date"
@@ -1392,6 +1817,22 @@ msgctxt ""
 msgid "No Value of the Bank"
 msgstr "keine Angabe der Bank"
 
+msgctxt "selection:account.ebics.fetch.result.line,state:"
+msgid "Error"
+msgstr "Fehler"
+
+msgctxt "selection:account.ebics.fetch.result.line,state:"
+msgid "No New Data"
+msgstr "keine neuen Daten"
+
+msgctxt "selection:account.ebics.fetch.result.line,state:"
+msgid "Received"
+msgstr "empfangen"
+
+msgctxt "selection:account.ebics.fetch.result.line,state:"
+msgid "Skipped"
+msgstr "übersprungen"
+
 msgctxt "selection:account.ebics.format,container:"
 msgid "SVC"
 msgstr "SVC"
@@ -1444,6 +1885,26 @@ msgctxt "selection:account.ebics.log,state:"
 msgid "No Data"
 msgstr "Keine Daten"
 
+msgctxt "selection:account.ebics.log,trigger:"
+msgid "Button"
+msgstr "Button"
+
+msgctxt "selection:account.ebics.log,trigger:"
+msgid "Cron, started automatically"
+msgstr "Cron, automatisch gestartet"
+
+msgctxt "selection:account.ebics.log,trigger:"
+msgid "Cron, started manually"
+msgstr "Cron, manuell gestartet"
+
+msgctxt "selection:account.ebics.log,trigger:"
+msgid "Menu"
+msgstr "Menü"
+
+msgctxt "selection:account.ebics.log,trigger:"
+msgid "Period Dialog"
+msgstr "Dialog Zeitraum"
+
 msgctxt "selection:account.ebics.log.file,state:"
 msgid "Duplicate"
 msgstr "Dublette"
@@ -1467,6 +1928,42 @@ msgstr "Abgelegt"
 msgctxt "selection:account.ebics.log.file,state:"
 msgid "Unknown Account"
 msgstr "Unbekanntes Konto"
+
+msgctxt "selection:account.ebics.run,state:"
+msgid "Done"
+msgstr "erledigt"
+
+msgctxt "selection:account.ebics.run,state:"
+msgid "Error"
+msgstr "Fehler"
+
+msgctxt "selection:account.ebics.run,state:"
+msgid "Running"
+msgstr "läuft"
+
+msgctxt "selection:account.ebics.run,trigger:"
+msgid "Button"
+msgstr "Button"
+
+msgctxt "selection:account.ebics.run,trigger:"
+msgid "Cron, started automatically"
+msgstr "Cron, automatisch gestartet"
+
+msgctxt "selection:account.ebics.run,trigger:"
+msgid "Cron, started manually"
+msgstr "Cron, manuell gestartet"
+
+msgctxt "selection:account.ebics.run,trigger:"
+msgid "Menu"
+msgstr "Menü"
+
+msgctxt "selection:account.ebics.run,trigger:"
+msgid "Period Dialog"
+msgstr "Dialog Zeitraum"
+
+msgctxt "selection:ir.cron,method:"
+msgid "Fetch EBICS Statements"
+msgstr "EBICS-Auszüge abrufen"
 
 msgctxt "view:account.ebics.configuration.confirm_bank_keys.start:"
 msgid ""
@@ -1536,6 +2033,26 @@ msgctxt "view:account.ebics.configuration:"
 msgid "User Certificates"
 msgstr "Eigene Zertifikate"
 
+msgctxt "view:account.ebics.fetch_period.start:"
+msgid "How far back the bank delivers depends on the bank."
+msgstr "Wie weit zurück die Bank liefert, ist bankabhängig."
+
+msgctxt "view:account.ebics.fetch_period.start:"
+msgid ""
+"The bank delivers the statements of the period again, also those already "
+"fetched. Duplicates are detected by the import."
+msgstr ""
+"Die Bank liefert die Auszüge des Zeitraums erneut, auch bereits abgeholte. "
+"Doppelte erkennt der Import."
+
+msgctxt "view:account.ebics.fetch_statements.start:"
+msgid ""
+"The statements ready at the bank are fetched for these active EBICS "
+"connections of the current companies."
+msgstr ""
+"Für diese aktiven EBICS-Zugänge der aktuellen Unternehmen werden die bei der"
+" Bank bereitstehenden Auszüge abgerufen."
+
 msgctxt "view:account.ebics.format:"
 msgid "BTF Parameters"
 msgstr "BTF-Angabe"
@@ -1543,6 +2060,14 @@ msgstr "BTF-Angabe"
 msgctxt "view:account.ebics.log.file:"
 msgid "Date"
 msgstr "Datum"
+
+msgctxt "view:account.ebics.log.file:"
+msgid "First Received"
+msgstr "Erstmals empfangen"
+
+msgctxt "view:account.ebics.log.file:"
+msgid "First Received Time"
+msgstr "Erstmals empfangen (Uhrzeit)"
 
 msgctxt "view:account.ebics.log.file:"
 msgid "Time"
@@ -1557,6 +2082,18 @@ msgid "Return"
 msgstr "Rückgabe"
 
 msgctxt "view:account.ebics.log:"
+msgid "Time"
+msgstr "Uhrzeit"
+
+msgctxt "view:account.ebics.log:"
+msgid "Triggered by"
+msgstr "Ausgelöst von"
+
+msgctxt "view:account.ebics.run:"
+msgid "Date"
+msgstr "Datum"
+
+msgctxt "view:account.ebics.run:"
 msgid "Time"
 msgstr "Uhrzeit"
 
@@ -1577,3 +2114,35 @@ msgstr "Abbrechen"
 msgctxt "wizard_button:account.ebics.configuration.reset_draft,start,reset:"
 msgid "Reset"
 msgstr "Zurücksetzen"
+
+msgctxt "wizard_button:account.ebics.fetch_period,result,end:"
+msgid "Close"
+msgstr "Schließen"
+
+msgctxt "wizard_button:account.ebics.fetch_period,result,open_log:"
+msgid "Open Log"
+msgstr "Protokoll öffnen"
+
+msgctxt "wizard_button:account.ebics.fetch_period,start,end:"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "wizard_button:account.ebics.fetch_period,start,fetch:"
+msgid "Fetch"
+msgstr "Abrufen"
+
+msgctxt "wizard_button:account.ebics.fetch_statements,confirm,end:"
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgctxt "wizard_button:account.ebics.fetch_statements,confirm,fetch:"
+msgid "Fetch"
+msgstr "Abrufen"
+
+msgctxt "wizard_button:account.ebics.fetch_statements,result,end:"
+msgid "Close"
+msgstr "Schließen"
+
+msgctxt "wizard_button:account.ebics.fetch_statements,result,open_log:"
+msgid "Open Log"
+msgstr "Protokoll öffnen"

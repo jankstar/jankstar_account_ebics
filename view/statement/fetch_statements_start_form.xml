@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form col="2">
+    <image name="tryton-info" xexpand="0" xfill="0"/>
+    <label string="The statements ready at the bank are fetched for these active EBICS connections of the current companies." id="explanation" xalign="0.0" xexpand="1"/>
+    <field name="configurations" colspan="2" height="200"/>
+</form>

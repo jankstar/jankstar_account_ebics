@@ -16,11 +16,11 @@ Every value can also be given by an environment variable
    timeout = 60
    ca_bundle =
    max_response_size = 10485760
+   max_segments = 100
+   max_zip_files = 1000
+   max_zip_size = 104857600
    xsd_dir =
    xsd_mode =
-
-The values ``max_zip_files``, ``max_zip_size`` and ``max_segments`` for the
-download of statements follow with the download.
 
 .. _config-account_ebics.passphrase:
 
@@ -80,6 +80,36 @@ The maximal size of a response of the bank in bytes.
 
 The default value is: ``10485760``
 
+.. _config-account_ebics.max_segments:
+
+``max_segments``
+================
+
+The maximal number of segments of a download (BTD).
+A download with more segments stops without receipt; the bank delivers the
+data again.
+
+The default value is: ``100``
+
+.. _config-account_ebics.max_zip_files:
+
+``max_zip_files``
+=================
+
+The maximal number of files in the container of a download.
+
+The default value is: ``1000``
+
+.. _config-account_ebics.max_zip_size:
+
+``max_zip_size``
+================
+
+The maximal size in bytes of the decompressed order data and of the files
+of a container together (protection against ZIP bombs).
+
+The default value is: ``104857600``
+
 .. _config-account_ebics.xsd_dir:
 
 ``xsd_dir``
@@ -102,7 +132,8 @@ How schema errors of the responses are handled, when ``xsd_dir`` is set:
    No validation.
 
 ``warn``
-   The errors are noted and the order continues.
+   The errors are noted in the field *Warnings* of the EBICS log and the
+   order continues.
 
 ``strict``
    The order stops without receipt.

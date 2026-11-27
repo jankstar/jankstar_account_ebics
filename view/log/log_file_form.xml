@@ -21,6 +21,16 @@ copyright notices and license terms. -->
     <field name="data"/>
     <label name="sha256"/>
     <field name="sha256" colspan="3"/>
+    <label name="copy_duplicate"/>
+    <field name="copy_duplicate"/>
+    <label name="repeated"/>
+    <field name="repeated"/>
+    <label name="first_file"/>
+    <field name="first_file"/>
+    <label name="first_received"/>
+    <field name="first_received"/>
+    <label name="first_log"/>
+    <field name="first_log" colspan="3"/>
     <notebook colspan="4">
         <page name="statements">
             <field name="statements" colspan="4"/>

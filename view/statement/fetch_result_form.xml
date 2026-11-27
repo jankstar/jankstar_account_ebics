@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<!-- This file is part of the account_ebics module for Tryton.
+The COPYRIGHT file at the top level of this repository contains the full
+copyright notices and license terms. -->
+<form col="2">
+    <label name="summary"/>
+    <field name="summary"/>
+    <field name="lines" colspan="2" height="250" view_ids="account_ebics.fetch_result_line_view_list"/>
+    <field name="logs" invisible="1" colspan="2"/>
+    <field name="outcomes" invisible="1" colspan="2"/>
+</form>
